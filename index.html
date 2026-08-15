@@ -39,7 +39,7 @@
 <label>Paiement<select id="rPay"><option>Virement</option><option>Chèque</option><option>Espèce</option><option>Carte bancaire</option></select></label>
 <label>N° facture<input id="rNum" readonly></label><label>Type<input id="rType" value="Ramonage cheminée bois"></label></div>
 <div class="panel"><h2>Appartement / sous-client</h2><div class="grid four">
-<label>Nom<input id="sNom"></label><label>Appartement<input id="sApp"></label><label>Intervention<input id="rType" value="Ramonage"></label><label>Prix TTC<input id="sPrix" type="number" step=".01"></label></div>
+<label>Nom<input id="sNom"></label><label>Appartement<input id="sApp"></label><label>Intervention<input id="sType"></label><label>Prix TTC<input id="sPrix" type="number" step=".01"></label></div>
 <div class="actions"><button class="primary" onclick="addLine()">➕ Ajouter</button><button onclick="useClientName()">Utiliser le nom du client</button></div>
 <div id="lines"></div><div class="total">Total TTC : <b id="total">0,00 €</b></div></div>
 <div class="panel actions"><button class="primary big" onclick="createInvoice()">📄 Créer facture + attestations</button><button onclick="resetNew()">Réinitialiser</button></div>
