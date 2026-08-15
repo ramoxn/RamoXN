@@ -20,6 +20,7 @@
 <main>
 <section id="home" class="pg active"><h1>Tableau de bord</h1>
 <div class="cloud"><span id="cloudDot">●</span><b id="cloudText">Google Drive non connecté</b><button class="primary" onclick="connectGoogle()">☁️ Connecter Google Drive</button></div>
+<div class="actions"><button onclick="syncNow()">☁️ Synchroniser maintenant</button><button onclick="restoreFromDrive()">⬇️ Restaurer depuis Drive</button></div></div>
 <div class="cards"><div class="card"><span>Clients</span><strong id="nClients">0</strong></div><div class="card"><span>Lotissements</span><strong id="nLots">0</strong></div><div class="card"><span>Factures</span><strong id="nInvoices">0</strong></div><div class="card"><span>Impayées</span><strong id="nDue">0</strong></div></div>
 <div class="panel"><h2>RamoXN</h2><p>Les données sont sauvegardées localement et peuvent être synchronisées avec ton Google Drive.</p><button class="primary big" onclick="page('new')">➕ Nouveau ramonage</button></div>
 </section>
