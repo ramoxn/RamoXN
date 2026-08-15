@@ -1,147 +1,61 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#135d9e">
-  <title>RamoXN — Gestion des ramonages</title>
-  <link rel="stylesheet" href="css/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5fa5">
+<title>RamoXN</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
-<header class="topbar">
-  <div class="brand"><strong>RamoXN</strong><span>Gestion des ramonages</span></div>
-  <button class="menu" onclick="toggleMenu()">☰</button>
-</header>
-
+<header class="top"><div><b>RamoXN</b><span>Gestion des ramonages</span></div><button class="hamb" onclick="menu()">☰</button></header>
 <nav id="nav">
-  <button data-page="dashboard">🏠 Tableau de bord</button>
-  <button data-page="clients">👤 Clients</button>
-  <button data-page="lotissements">🏘️ Lotissements</button>
-  <button data-page="ramonage">🧹 Nouveau ramonage</button>
-  <button data-page="factures">🧾 Factures</button>
+<button onclick="page('home')">🏠 Accueil</button><button onclick="page('clients')">👤 Clients</button>
+<button onclick="page('lots')">🏘️ Lotissements</button><button onclick="page('new')">🧹 Ramonage</button>
+<button onclick="page('invoices')">🧾 Factures</button><button onclick="page('settings')">☁️ Google Drive</button>
 </nav>
-
 <main>
-<section id="dashboard" class="page active">
-  <h1>Tableau de bord</h1>
-  <div class="cards">
-    <div class="card"><small>Clients</small><b id="statClients">0</b></div>
-    <div class="card"><small>Lotissements</small><b id="statLots">0</b></div>
-    <div class="card"><small>Factures</small><b id="statFactures">0</b></div>
-    <div class="card"><small>Impayées</small><b id="statImpayees">0</b></div>
-  </div>
-  <div class="panel">
-    <h2>RamoXN</h2>
-    <p>Application web basée sur ton programme Python de gestion des factures et attestations de ramonage.</p>
-    <button class="primary" onclick="showPage('ramonage')">➕ Nouveau ramonage</button>
-  </div>
+<section id="home" class="pg active"><h1>Tableau de bord</h1>
+<div class="cloud"><span id="cloudDot">●</span><b id="cloudText">Google Drive non connecté</b><button class="primary" onclick="connectGoogle()">☁️ Connecter Google Drive</button></div>
+<div class="cards"><div class="card"><span>Clients</span><strong id="nClients">0</strong></div><div class="card"><span>Lotissements</span><strong id="nLots">0</strong></div><div class="card"><span>Factures</span><strong id="nInvoices">0</strong></div><div class="card"><span>Impayées</span><strong id="nDue">0</strong></div></div>
+<div class="panel"><h2>RamoXN</h2><p>Les données sont sauvegardées localement et peuvent être synchronisées avec ton Google Drive.</p><button class="primary big" onclick="page('new')">➕ Nouveau ramonage</button></div>
 </section>
 
-<section id="clients" class="page">
-  <h1>Clients</h1>
-  <div class="grid2">
-    <form class="panel" id="clientForm">
-      <input type="hidden" id="clientOldName">
-      <label>Nom du client<input id="clientNom" required></label>
-      <label>Rue<input id="clientRue" required></label>
-      <label>Ville<input id="clientVille" required></label>
-      <label>Téléphone<input id="clientTel" required></label>
-      <label>Email<input id="clientEmail" type="email" required></label>
-      <div class="actions">
-        <button class="primary">Enregistrer</button>
-        <button type="button" onclick="resetClient()">Annuler</button>
-      </div>
-    </form>
-    <div class="panel">
-      <h2>Clients enregistrés</h2>
-      <div id="clientsList"></div>
-    </div>
-  </div>
+<section id="clients" class="pg"><h1>Clients</h1><div class="cols"><form class="panel" id="clientForm"><input type="hidden" id="oldClient">
+<label>Nom<input id="cNom" required></label><label>Rue<input id="cRue" required></label><label>Ville<input id="cVille" required></label><label>Téléphone<input id="cTel" required></label><label>Email<input id="cEmail" type="email" required></label>
+<div class="actions"><button class="primary">Enregistrer</button><button type="button" onclick="resetClient()">Annuler</button></div></form>
+<div class="panel"><h2>Clients</h2><div id="clientList"></div></div></div></section>
+
+<section id="lots" class="pg"><h1>Lotissements</h1><div class="cols"><form class="panel" id="lotForm"><input type="hidden" id="oldLot">
+<label>Nom<input id="lNom" required></label><label>Rue<input id="lRue" required></label><label>Ville<input id="lVille" required></label>
+<div class="actions"><button class="primary">Enregistrer</button><button type="button" onclick="resetLot()">Annuler</button></div></form>
+<div class="panel"><h2>Lotissements</h2><div id="lotList"></div></div></div></section>
+
+<section id="new" class="pg"><h1>Nouveau ramonage</h1>
+<div class="panel grid"><label>Client<select id="rClient"></select></label><label>Lotissement<select id="rLot"></select></label><label>Date<input type="date" id="rDate"></label>
+<label>Paiement<select id="rPay"><option>Virement</option><option>Chèque</option><option>Espèce</option><option>Carte bancaire</option></select></label>
+<label>N° facture<input id="rNum" readonly></label><label>Type<input id="rType" value="Ramonage cheminée bois"></label></div>
+<div class="panel"><h2>Appartement / sous-client</h2><div class="grid four">
+<label>Nom<input id="sNom"></label><label>Appartement<input id="sApp"></label><label>Intervention<input id="sType"></label><label>Prix TTC<input id="sPrix" type="number" step=".01"></label></div>
+<div class="actions"><button class="primary" onclick="addLine()">➕ Ajouter</button><button onclick="useClientName()">Utiliser le nom du client</button></div>
+<div id="lines"></div><div class="total">Total TTC : <b id="total">0,00 €</b></div></div>
+<div class="panel actions"><button class="primary big" onclick="createInvoice()">📄 Créer facture + attestations</button><button onclick="resetNew()">Réinitialiser</button></div>
 </section>
 
-<section id="lotissements" class="page">
-  <h1>Lotissements</h1>
-  <div class="grid2">
-    <form class="panel" id="lotForm">
-      <input type="hidden" id="lotOldName">
-      <label>Nom du lotissement<input id="lotNom" required></label>
-      <label>Rue<input id="lotRue" required></label>
-      <label>Ville<input id="lotVille" required></label>
-      <div class="actions">
-        <button class="primary">Enregistrer</button>
-        <button type="button" onclick="resetLot()">Annuler</button>
-      </div>
-    </form>
-    <div class="panel">
-      <h2>Lotissements enregistrés</h2>
-      <div id="lotsList"></div>
-    </div>
-  </div>
+<section id="invoices" class="pg"><h1>Factures</h1><div class="panel"><div class="table"><table><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Total</th><th>État</th><th>Actions</th></tr></thead><tbody id="invoiceList"></tbody></table></div></div></section>
+
+<section id="settings" class="pg"><h1>Google Drive</h1>
+<div class="panel"><h2>Connexion</h2><p>Entre ici le <b>Client ID OAuth Web</b> de ton projet Google Cloud.</p>
+<label>Client ID Google<input id="clientId" placeholder="1234567890-xxxxx.apps.googleusercontent.com"></label>
+<div class="actions"><button class="primary" onclick="saveClientId()">Enregistrer</button><button class="primary" onclick="connectGoogle()">🔐 Se connecter</button><button onclick="disconnectGoogle()">Déconnecter</button></div>
+<p id="status" class="muted"></p></div>
+<div class="panel"><h2>Synchronisation</h2><p>RamoXN crée un dossier <b>RamoXN</b> dans ton Drive. Les données sont stockées dans un fichier JSON et les factures/attestations en PDF.</p>
+<div class="actions"><button onclick="syncNow()">☁️ Synchroniser maintenant</button><button onclick="restoreFromDrive()">⬇️ Restaurer depuis Drive</button></div></div>
+<div class="panel"><h2>Sauvegarde locale</h2><button onclick="exportBackup()">⬇️ Exporter</button><label class="file">Importer<input type="file" accept=".json" onchange="importBackup(event)"></label></div>
 </section>
-
-<section id="ramonage" class="page">
-  <h1>Nouveau ramonage</h1>
-  <div class="panel">
-    <div class="grid3">
-      <label>Client principal
-        <select id="rClient"></select>
-      </label>
-      <label>Lotissement
-        <select id="rLot"></select>
-      </label>
-      <label>Date d'intervention
-        <input type="date" id="rDate">
-      </label>
-    </div>
-    <div class="grid3">
-      <label>Mode de paiement
-        <select id="rPaiement">
-          <option>Virement</option><option>Chèque</option><option>Espèce</option><option>Carte bancaire</option>
-        </select>
-      </label>
-      <label>N° de facture
-        <input id="rNumero" readonly>
-      </label>
-      <label>Type d'intervention
-        <input id="rType" placeholder="Ramonage cheminée bois">
-      </label>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>Sous-clients / appartements</h2>
-    <div class="grid4">
-      <label>Nom<input id="sNom"></label>
-      <label>Appartement<input id="sApp"></label>
-      <label>Intervention<input id="sType"></label>
-      <label>Prix TTC<input id="sPrix" type="number" step="0.01"></label>
-    </div>
-    <div class="actions">
-      <button class="primary" onclick="addLine()">➕ Ajouter</button>
-      <button onclick="copyClientName()">↔ Utiliser le nom du client</button>
-    </div>
-    <div id="lines"></div>
-    <div class="total">Total TTC : <strong id="total">0,00 €</strong></div>
-  </div>
-
-  <div class="panel actions">
-    <button class="primary big" onclick="generateDocuments()">📄 Générer facture et attestations</button>
-    <button onclick="resetRamonage()">Réinitialiser</button>
-  </div>
-</section>
-
-<section id="factures" class="page">
-  <h1>Suivi des factures</h1>
-  <div class="panel">
-    <div class="tablewrap">
-      <table><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Total</th><th>Statut</th><th>Actions</th></tr></thead>
-      <tbody id="invoiceTable"></tbody></table>
-    </div>
-  </div>
-</section>
-</main>
-
-<div id="toast"></div>
+</main><div id="toast"></div>
 <script src="js/app.js"></script>
-</body>
-</html>
+</body></html>
