@@ -293,6 +293,23 @@
       </section>
 
       <section class="card space-y-4">
+        <h2 class="text-lg font-bold border-b pb-2 text-slate-700">📄 Résultats de recherche PDF</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse border">
+            <thead>
+              <tr class="bg-slate-100 text-sm">
+                <th class="border p-2">Type</th>
+                <th class="border p-2">Fichier</th>
+                <th class="border p-2">Correspondance</th>
+                <th class="border p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody id="pdf-results-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card space-y-4">
         <h2 class="text-lg font-bold border-b pb-2 text-slate-700">📋 Factures</h2>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input id="suivi-client" type="text" placeholder="Client" class="border border-gray-300 rounded p-2">
@@ -324,23 +341,6 @@
               </tr>
             </thead>
             <tbody id="suivi-factures-table"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="card space-y-4">
-        <h2 class="text-lg font-bold border-b pb-2 text-slate-700">📄 Résultats de recherche PDF</h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse border">
-            <thead>
-              <tr class="bg-slate-100 text-sm">
-                <th class="border p-2">Type</th>
-                <th class="border p-2">Fichier</th>
-                <th class="border p-2">Correspondance</th>
-                <th class="border p-2">Action</th>
-              </tr>
-            </thead>
-            <tbody id="pdf-results-table"></tbody>
           </table>
         </div>
       </section>
