@@ -1,5 +1,7 @@
 const STORE="ramoxn_gdrive_v1";
 const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";
+const GMAIL_SCOPE="https://www.googleapis.com/auth/gmail.send";
+const GOOGLE_SCOPES=DRIVE_SCOPE+" "+GMAIL_SCOPE;
 const DISCOVERY="https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
 let db=JSON.parse(localStorage.getItem(STORE)||'{"clients":{},"lots":{},"invoices":[],"next":1,"settings":{"clientId":""}}');
 let lines=[],tokenClient=null,accessToken=null,driveReady=false,folderId=null,dataFileId=null;
@@ -36,13 +38,19 @@ function resetNew(){lines=[];rClient.value=rLot.value="";rDate.value=today();rPa
 async function createInvoice(){
  if(!rClient.value||!rLot.value||!lines.length){msg("Client, lotissement et au moins une ligne sont requis");return}
  let n=invNo(),c=db.clients[rClient.value],l=db.lots[rLot.value];
- let x={number:n,date:rDate.value,client:rClient.value,clientInfo:c,lot:rLot.value,lotInfo:l,payment:rPay.value,type:rType.value,lines:structuredClone(lines),total:lines.reduce((a,z)=>a+z.prix,0),status:["Espèce","Carte bancaire"].includes(rPay.value)?"Payée":"Non payée"};
- db.invoices.push(x);db.next++;save();
- if(accessToken){try{await syncNow();await uploadPDFs(x);msg("Facture, attestations et données synchronisées dans Drive")}catch(e){console.error(e);msg("Facture créée, mais synchronisation Drive impossible")}}
- else {download("Facture_"+n+".pdf",makePDF(x,"facture"));x.lines.forEach((a,i)=>download("Attestation_"+n+"_"+safe(a.app)+".pdf",makePDF(x,"attestation",a,i)));msg("Documents PDF créés")}
+ let x={number:n,date:rDate.value,client:rClient.value,clientInfo:c,lot:rLot.value,lotInfo:l,payment:rPay.value,type:rType.value,lines:structuredClone(lines),total:lines.reduce((a,z)=>a+z.prix,0),status:["Espèce","Carte bancaire"].includes(rPay.value)?"Payée":"Non payée",driveFiles:[],mailSent:false};
+ db.invoices.push(x);db.next++;save();page("invoices");
+ if(!accessToken){toastMsg("Facture enregistrée. Connecte Google pour envoyer et stocker les PDF.");downloadInvoice(db.invoices.length-1);resetNew();return}
+ try{
+   await ensureDriveFolder();
+   await uploadPDFs(x);
+   if(c.email) await sendInvoiceEmail(x,c.email);
+   await syncNow(false);
+   db.invoices[db.invoices.length-1]=x;save();
+   toastMsg(c.email ? (x.mailSent?"Facture + attestations stockées dans Drive et envoyées par e-mail":"PDF stockés dans Drive, e-mail non envoyé") : "PDF stockés dans Drive : aucun e-mail client renseigné");
+ }catch(e){console.error(e);toastMsg("Facture créée, mais erreur Google : "+(e.message||e))}
  resetNew();page("invoices")
 }
-
 function makePDF(x,type,a=null,i=0){
  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:"mm",format:"a4"});doc.setFont("helvetica");doc.setFontSize(16);doc.setFont(undefined,"bold");
  let y=18;doc.text(type==="facture"?"FACTURE N° "+x.number:"CERTIFICAT DE RAMONAGE",105,y,{align:"center"});y+=12;doc.setFontSize(10);doc.setFont(undefined,"normal");
@@ -64,52 +72,50 @@ function makePDF(x,type,a=null,i=0){
 function download(name,blob){let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}
 
 function render(){
- nClients.textContent=Object.keys(db.clients).length;nLots.textContent=Object.keys(db.lots).length;nInvoices.textContent=db.invoices.length;nDue.textContent=db.invoices.filter(x=>x.status!=="Payée").length;
- clientList.innerHTML=Object.entries(db.clients).map(([n,x])=>`<div class="item"><b>${esc(n)}</b><br>${esc(x.rue)}, ${esc(x.ville)}<br>${esc(x.telephone)} · ${esc(x.email)}<div class="actions"><button onclick="editClient('${q(n)}')">Modifier</button><button onclick="delClient('${q(n)}')">Supprimer</button></div></div>`).join("")||'<p class="muted">Aucun client.</p>';
- lotList.innerHTML=Object.entries(db.lots).map(([n,x])=>`<div class="item"><b>${esc(n)}</b><br>${esc(x.rue)}, ${esc(x.ville)}<div class="actions"><button onclick="editLot('${q(n)}')">Modifier</button><button onclick="delLot('${q(n)}')">Supprimer</button></div></div>`).join("")||'<p class="muted">Aucun lotissement.</p>';
+ nClients.textContent=Object.keys(db.clients||{}).length;
+ nLots.textContent=Object.keys(db.lots||{}).length;
+ nInvoices.textContent=(db.invoices||[]).length;
+ nDue.textContent=(db.invoices||[]).filter(x=>x.status!=="Payée").length;
+ clientList.innerHTML=Object.entries(db.clients||{}).map(([n,x])=>`<div class="item"><b>${esc(n)}</b><br>${esc(x.rue)}, ${esc(x.ville)}<br>${esc(x.telephone)} · ${esc(x.email)}<div class="actions"><button onclick="editClient('${q(n)}')">Modifier</button><button onclick="delClient('${q(n)}')">Supprimer</button></div></div>`).join("")||'<p class="muted">Aucun client.</p>';
+ lotList.innerHTML=Object.entries(db.lots||{}).map(([n,x])=>`<div class="item"><b>${esc(n)}</b><br>${esc(x.rue)}, ${esc(x.ville)}<div class="actions"><button onclick="editLot('${q(n)}')">Modifier</button><button onclick="delLot('${q(n)}')">Supprimer</button></div></div>`).join("")||'<p class="muted">Aucun lotissement.</p>';
  fill();rNum.value=invNo();if(!rDate.value)rDate.value=today();renderLines();
- invoiceList.innerHTML=db.invoices.slice().reverse().map((x,k)=>{let i=db.invoices.length-1-k;return `<tr><td>${esc(x.number)}</td><td>${esc(x.date)}</td><td>${esc(x.client)}</td><td>${eur(x.total)}</td><td class="${x.status==="Payée"?"paid":"due"}">${x.status}</td><td><button onclick="togglePaid(${i})">${x.status==="Payée"?"Non payée":"Payée"}</button><button onclick="download('Facture_${safe(x.number)}.pdf',makePDF(db.invoices[${i}],'facture'))"> PDF</button></td></tr>`}).join("");
- clientId.value=db.settings.clientId||"";status.textContent=accessToken?"Google Drive connecté.":"Google Drive non connecté.";
- cloudText.textContent=accessToken?"Google Drive connecté":"Google Drive non connecté";cloudDot.parentElement.parentElement.className="cloud "+(accessToken?"ok":"bad");
+ const list=document.getElementById('invoiceList');const invs=db.invoices||[];
+ list.innerHTML=invs.slice().reverse().map((x,k)=>{let i=invs.length-1-k;return `<tr><td>${esc(x.number)}</td><td>${esc(x.date)}</td><td>${esc(x.client)}</td><td>${eur(x.total)}</td><td class="${x.status==="Payée"?"paid":"due"}">${esc(x.status)}</td><td><button onclick="downloadInvoice(${i})">PDF</button> <button onclick="sendExisting(${i})">✉️</button> <button onclick="togglePaid(${i})">${x.status==="Payée"?"Non payée":"Payée"}</button></td></tr>`}).join('')||'<tr><td colspan="6">Aucune facture enregistrée.</td></tr>';
+ clientId.value=db.settings.clientId||"";
+ status.textContent=accessToken?"🟢 Google Drive + Gmail connectés.":"🔴 Google non connecté.";
+ cloudText.textContent=accessToken?"Google Drive + Gmail connectés":"Google Drive non connecté";
+ cloudDot.parentElement.parentElement.className="cloud "+(accessToken?"ok":"bad");
 }
+function downloadInvoice(i){let x=db.invoices[i];download("Facture_"+safe(x.number)+".pdf",makePDF(x,"facture"));x.lines.forEach((a)=>download("Attestation_"+safe(x.number)+"_"+safe(a.app)+".pdf",makePDF(x,"attestation",a)))}
+async function sendExisting(i){if(!accessToken){msg("Connecte Google d'abord");return}let x=db.invoices[i],email=x.clientInfo&&x.clientInfo.email;if(!email){msg("Ce client n'a pas d'e-mail");return}try{await uploadPDFs(x);await sendInvoiceEmail(x,email);db.invoices[i]=x;save();msg("Documents stockés et e-mail envoyé")}catch(e){console.error(e);msg("Erreur d'envoi : "+e.message)}}
+
 function togglePaid(i){db.invoices[i].status=db.invoices[i].status==="Payée"?"Non payée":"Payée";save();if(accessToken)syncNow()}
 function saveClientId(){db.settings.clientId=clientId.value.trim();save();msg("Client ID enregistré")}
 
-async function initDrive(){
- if(!db.settings.clientId){msg("Ajoute ton Client ID Google dans Paramètres");return}
- await new Promise(resolve=>gapi.load("client",resolve));await gapi.client.init({discoveryDocs:[DISCOVERY]});
- tokenClient=google.accounts.oauth2.initTokenClient({client_id:db.settings.clientId,scope:DRIVE_SCOPE,callback:async(resp)=>{if(resp.error){msg("Connexion Google refusée");return}accessToken=resp.access_token;await findOrCreateFolder();await findDataFile();render();msg("Google Drive connecté")}});
- tokenClient.requestAccessToken({prompt:"consent"})
+function connectGoogle(){
+ if(!db.settings.clientId){msg("Ajoute le Client ID Google dans Paramètres");return}
+ if(!window.google||!google.accounts||!google.accounts.oauth2){msg("Google n'est pas encore chargé. Réessaie dans quelques secondes.");return}
+ tokenClient=google.accounts.oauth2.initTokenClient({client_id:db.settings.clientId,scope:GOOGLE_SCOPES,callback:async(resp)=>{
+   if(resp.error){console.error(resp);msg("Connexion Google refusée : "+resp.error);return}
+   accessToken=resp.access_token;render();
+   try{await ensureDriveFolder();await syncNow(false);msg("🟢 Google Drive + Gmail connectés")}catch(e){console.error(e);msg("Google connecté mais Drive inaccessible : "+e.message)}
+ }});
+ tokenClient.requestAccessToken({prompt:"consent"});
 }
-function connectGoogle(){initDrive().catch(e=>{console.error(e);msg("Erreur de connexion Google")})}
-function disconnectGoogle(){accessToken=null;folderId=null;dataFileId=null;render();msg("Google Drive déconnecté")}
+function disconnectGoogle(){accessToken=null;folderId=null;dataFileId=null;render();msg("Google déconnecté")}
+async function googleFetch(url,options={}){options.headers={...(options.headers||{}),Authorization:"Bearer "+accessToken};let r=await fetch(url,options);if(!r.ok){let t=await r.text();throw new Error(t||r.statusText)}return r}
+async function ensureDriveFolder(){let q=encodeURIComponent("name='RamoXN' and mimeType='application/vnd.google-apps.folder' and trashed=false");let r=await googleFetch("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id,name)").then(x=>x.json());if(r.files&&r.files.length)folderId=r.files[0].id;else{let x=await googleFetch("https://www.googleapis.com/drive/v3/files",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:"RamoXN",mimeType:"application/vnd.google-apps.folder"})}).then(x=>x.json());folderId=x.id}}
+async function findDataFile(){let q=encodeURIComponent(`'${folderId}' in parents and name='RamoXN_data.json' and trashed=false`);let r=await googleFetch("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id,name)").then(x=>x.json());dataFileId=r.files&&r.files.length?r.files[0].id:null}
+async function driveUpload(name,blob,mime,existingId=null){let meta={name,mimeType:mime};if(!existingId)meta.parents=[folderId];let boundary="ramoxn_"+Date.now();let body=new Blob(["--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n",JSON.stringify(meta),"\r\n--"+boundary+"\r\nContent-Type: "+mime+"\r\n\r\n",blob,"\r\n--"+boundary+"--"]);let url=existingId?`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`:`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;return googleFetch(url,{method:existingId?"PATCH":"POST",headers:{"Content-Type":"multipart/related; boundary="+boundary},body}).then(x=>x.json())}
+async function syncNow(show=true){if(!accessToken)throw new Error("Google n'est pas connecté");await ensureDriveFolder();await findDataFile();let r=await driveUpload("RamoXN_data.json",new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),"application/json",dataFileId);dataFileId=r.id||dataFileId;if(show)msg("Données synchronisées dans Google Drive")}
+async function uploadPDFs(x){await ensureDriveFolder();let f=await driveUpload("Facture_"+x.number+".pdf",makePDF(x,"facture"),"application/pdf");x.driveFiles=[f.id];for(let i=0;i<x.lines.length;i++){let a=x.lines[i],r=await driveUpload("Attestation_"+x.number+"_"+safe(a.app)+".pdf",makePDF(x,"attestation",a,i),"application/pdf");x.driveFiles.push(r.id)}}
+function bytesToB64(bytes){let s="";let u=new Uint8Array(bytes);for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s)}
+function b64url(s){return s.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
+async function blobB64(blob){return b64url(bytesToB64(await blob.arrayBuffer()))}
+async function sendInvoiceEmail(x,to){let attachments=[{name:"Facture_"+x.number+".pdf",mime:"application/pdf",b64:await blobB64(makePDF(x,"facture"))}];for(const a of x.lines)attachments.push({name:"Attestation_"+x.number+"_"+safe(a.app)+".pdf",mime:"application/pdf",b64:await blobB64(makePDF(x,"attestation",a))});let boundary="RamoXN-Mail";let parts=["From: me","To: "+to,"Subject: RamoXN - Facture "+x.number,"MIME-Version: 1.0","Content-Type: multipart/mixed; boundary=\""+boundary+"\"","","--"+boundary,"Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: 8bit","","Bonjour,\r\n\r\nVeuillez trouver en pièces jointes votre facture "+x.number+" ainsi que votre/vos attestation(s) de ramonage.\r\n\r\nCordialement,\r\nRamoXN"];
+ for(const a of attachments)parts.push("--"+boundary,"Content-Type: "+a.mime+"; name=\""+a.name+"\"","Content-Disposition: attachment; filename=\""+a.name+"\"","Content-Transfer-Encoding: base64","",a.b64);parts.push("--"+boundary+"--");let raw=b64url(bytesToB64(new TextEncoder().encode(parts.join("\r\n"))));let r=await googleFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({raw})}).then(x=>x.json());x.mailSent=true;x.mailId=r.id||null}
+async function restoreFromDrive(){if(!accessToken){msg("Connecte Google d'abord");return}await ensureDriveFolder();await findDataFile();if(!dataFileId){msg("Aucune sauvegarde RamoXN trouvée");return}let r=await googleFetch(`https://www.googleapis.com/drive/v3/files/${dataFileId}?alt=media`);db=await r.json();localStorage.setItem(STORE,JSON.stringify(db));render();msg("Données restaurées depuis Drive")}
 
-async function findOrCreateFolder(){
- let r=await gapi.client.drive.files.list({q:"name='RamoXN' and mimeType='application/vnd.google-apps.folder' and trashed=false",fields:"files(id,name)"});
- if(r.result.files.length)folderId=r.result.files[0].id;else{let c=await gapi.client.drive.files.create({resource:{name:"RamoXN",mimeType:"application/vnd.google-apps.folder"},fields:"id"});folderId=c.result.id}
-}
-async function findDataFile(){
- let r=await gapi.client.drive.files.list({q:`'${folderId}' in parents and name='RamoXN_data.json' and trashed=false`,fields:"files(id,name)"});
- dataFileId=r.result.files.length?r.result.files[0].id:null;
-}
-async function driveUpload(name,blob,mime,existingId=null){
- let meta={name,parents:existingId?undefined:[folderId],mimeType:mime};let url=existingId?`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`:"https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
- let boundary="ramoxn_boundary_"+Date.now();let body=new Blob(["--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n",JSON.stringify(meta),"\r\n--"+boundary+"\r\nContent-Type: "+mime+"\r\n\r\n",blob,"\r\n--"+boundary+"--"]);
- let res=await fetch(url,{method:existingId?"PATCH":"POST",headers:{Authorization:"Bearer "+accessToken,"Content-Type":"multipart/related; boundary="+boundary},body});if(!res.ok)throw new Error(await res.text());return res.json()
-}
-async function syncNow(){
- if(!accessToken){msg("Connecte Google Drive d'abord");return}
- await findOrCreateFolder();await findDataFile();let blob=new Blob([JSON.stringify(db)],{type:"application/json"});await driveUpload("RamoXN_data.json",blob,"application/json",dataFileId);await findDataFile();msg("Données synchronisées")
-}
-async function uploadPDFs(x){
- await findOrCreateFolder();await driveUpload("Facture_"+x.number+".pdf",makePDF(x,"facture"),"application/pdf");
- for(let i=0;i<x.lines.length;i++){let a=x.lines[i];await driveUpload("Attestation_"+x.number+"_"+safe(a.app)+".pdf",makePDF(x,"attestation",a,i),"application/pdf")}
-}
-async function restoreFromDrive(){
- if(!accessToken){msg("Connecte Google Drive d'abord");return}
- await findOrCreateFolder();await findDataFile();if(!dataFileId){msg("Aucune sauvegarde RamoXN dans Drive");return}
- let r=await gapi.client.drive.files.get({fileId:dataFileId,alt:"media"});db=r.result;localStorage.setItem(STORE,JSON.stringify(db));render();msg("Données restaurées depuis Drive")
-}
 function exportBackup(){download("RamoXN_sauvegarde.json",new Blob([JSON.stringify(db,null,2)],{type:"application/json"}))}
 function importBackup(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);save();msg("Sauvegarde importée")}catch{msg("Fichier invalide")}};r.readAsText(f)}
 

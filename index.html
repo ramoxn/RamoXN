@@ -7,7 +7,6 @@
 <title>RamoXN</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -20,7 +19,6 @@
 <main>
 <section id="home" class="pg active"><h1>Tableau de bord</h1>
 <div class="cloud"><span id="cloudDot">●</span><b id="cloudText">Google Drive non connecté</b><button class="primary" onclick="connectGoogle()">☁️ Connecter Google Drive</button></div>
-<div class="actions"><button onclick="syncNow()">☁️ Synchroniser maintenant</button><button onclick="restoreFromDrive()">⬇️ Restaurer depuis Drive</button></div></div>
 <div class="cards"><div class="card"><span>Clients</span><strong id="nClients">0</strong></div><div class="card"><span>Lotissements</span><strong id="nLots">0</strong></div><div class="card"><span>Factures</span><strong id="nInvoices">0</strong></div><div class="card"><span>Impayées</span><strong id="nDue">0</strong></div></div>
 <div class="panel"><h2>RamoXN</h2><p>Les données sont sauvegardées localement et peuvent être synchronisées avec ton Google Drive.</p><button class="primary big" onclick="page('new')">➕ Nouveau ramonage</button></div>
 </section>
@@ -43,7 +41,7 @@
 <label>Nom<input id="sNom"></label><label>Appartement<input id="sApp"></label><label>Intervention<input id="sType"></label><label>Prix TTC<input id="sPrix" type="number" step=".01"></label></div>
 <div class="actions"><button class="primary" onclick="addLine()">➕ Ajouter</button><button onclick="useClientName()">Utiliser le nom du client</button></div>
 <div id="lines"></div><div class="total">Total TTC : <b id="total">0,00 €</b></div></div>
-<div class="panel actions"><button class="primary big" onclick="createInvoice()">📄 Créer facture + attestations</button><button onclick="resetNew()">Réinitialiser</button></div>
+<div class="panel actions"><button class="primary big" onclick="createInvoice()">📄 Créer facture + attestations + envoyer</button><button onclick="resetNew()">Réinitialiser</button></div>
 </section>
 
 <section id="invoices" class="pg"><h1>Factures</h1><div class="panel"><div class="table"><table><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Total</th><th>État</th><th>Actions</th></tr></thead><tbody id="invoiceList"></tbody></table></div></div></section>

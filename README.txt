@@ -1,21 +1,25 @@
-RAMOXN + GOOGLE DRIVE
-=====================
+RAMOXN FINAL - GOOGLE DRIVE + GMAIL
 
-Cette version est une application web responsive pour téléphone/ordinateur.
+Cette version corrige :
+- l'affichage des factures dans l'onglet Factures ;
+- la génération des PDF facture et attestations ;
+- le stockage des PDF dans Google Drive ;
+- l'envoi de la facture + attestations au client par Gmail ;
+- l'état de connexion Google ;
+- la synchronisation du JSON ;
+- téléphone + ordinateur.
 
-1) Héberge le dossier sur un site HTTPS (ou teste avec un serveur local).
-2) Dans Google Cloud Console, crée un projet.
-3) Active Google Drive API.
-4) Configure Google Auth Platform / OAuth.
-5) Crée un client OAuth 2.0 de type Application Web.
-6) Ajoute l'origine HTTPS de ton site dans "Origines JavaScript autorisées".
-7) Copie le Client ID dans RamoXN > Google Drive.
-8) Clique "Se connecter".
-9) RamoXN créera un dossier "RamoXN" dans ton Drive.
-10) Les données sont synchronisées dans RamoXN_data.json et les factures/attestations sont envoyées en PDF.
+CONFIGURATION GOOGLE
+1. Conserver le Client ID OAuth Web existant.
+2. Google Drive API doit être activée.
+3. Activer Gmail API dans le même projet Google Cloud.
+4. Dans Google Auth Platform > Data Access, ajouter :
+   https://www.googleapis.com/auth/drive.file
+   https://www.googleapis.com/auth/gmail.send
+5. Garder le compte contact.ramoxn@gmail.com comme utilisateur test.
+6. Origine JavaScript autorisée : https://ramoxn.github.io
+7. Remplacer index.html, css/style.css et js/app.js dans le dépôt GitHub.
+8. Recharger RamoXN et refaire la connexion Google pour accepter Gmail.
+9. Une facture crée les PDF, les stocke dans Drive et les envoie à l'adresse e-mail du client.
 
-IMPORTANT :
-- Aucun mot de passe Google/Gmail n'est demandé ou stocké dans le code.
-- Le navigateur doit être utilisé via HTTPS pour une vraie mise en production.
-- Le fichier index.html ne doit pas être ouvert en double-cliquant pour la version Google : utilise un hébergement ou un serveur HTTP.
-- Cette version utilise Google Identity Services et l'API Google Drive.
+Le mail est envoyé depuis le compte Google connecté via Gmail API. Aucun mot de passe Gmail n'est stocké.
