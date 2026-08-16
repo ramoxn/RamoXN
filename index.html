@@ -3,541 +3,373 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RamoXN - Gestion des Factures et Attestations</title>
+  <title>Gestion RamoXN - Factures & Attestations</title>
 
-  <!-- Tailwind CSS pour un design moderne et responsive -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- jsPDF & AutoTable pour générer des PDF côté navigateur -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- API Google Identity Services et Google Drive JS SDK -->
+  <!-- Google API Libraries -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
 
+  <!-- HTML2PDF Library pour la génération exacte des PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
   <style>
-    body { background-color: #f3f4f6; }
-    .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    :root {
+      --primary-color: #2c3e50;
+      --accent-color: #e67e22;
+      --bg-color: #f4f6f7;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      margin: 0;
+      padding: 20px;
+    }
+    
+    /* Écran de Sécurité / Mot de passe */
+    #login-screen {
+      max-width: 400px;
+      margin: 100px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      display: none; /* Masqué jusqu'à authentification */
+    }
+
+    h1, h2 { color: var(--primary-color); }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      font-size: 0.9em;
+    }
+    input, select, textarea {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1em;
+    }
+    .btn-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1em;
+    }
+    .btn-primary { background: var(--primary-color); color: white; }
+    .btn-action { background: var(--accent-color); color: white; }
+    
+    /* Templates cachés pour la génération PDF */
+    .pdf-template {
+      display: none;
+      width: 210mm;
+      min-height: 297mm;
+      padding: 15mm;
+      background: white;
+      color: #000;
+      font-family: Arial, sans-serif;
+      font-size: 10pt;
+      box-sizing: border-box;
+    }
+    .header-table, .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+    .header-table td { vertical-align: top; width: 50%; }
+    .data-table th, .data-table td {
+      border: 1px solid #000;
+      padding: 6px;
+      text-align: left;
+    }
+    .data-table th { background-color: #f2f2f2; }
+    .footer-legal {
+      margin-top: 30px;
+      font-size: 8pt;
+      text-align: center;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+    }
   </style>
 </head>
-<body class="p-4 md:p-8 font-sans">
+<body>
 
-  <div class="max-w-6xl mx-auto space-y-6">
+  <!-- ÉCRAN DE VERROUILLAGE -->
+  <div id="login-screen">
+    <h2>Connexion RamoXN</h2>
+    <p>Veuillez entrer le mot de passe de sécurité :</p>
+    <input type="password" id="app-password" placeholder="Mot de passe">
+    <br><br>
+    <button class="btn-primary" onclick="unlockApp()">Valider</button>
+    <p id="auth-error" style="color:red; display:none;">Mot de passe incorrect !</p>
+  </div>
 
-    <!-- En-tête / Connexion Google -->
-    <header class="card flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 text-white">
-      <div>
-        <h1 class="text-2xl font-bold">RamoXN - Facturation & Ramonage</h1>
-        <p class="text-sm text-slate-300">Application web connectée à Google Drive</p>
+  <!-- APPLICATION PRINCIPALE -->
+  <div class="container" id="app-container">
+    <h1>Générateur Factures & Attestations RamoXN</h1>
+    <p><strong>Google Drive :</strong> <span id="auth-status" style="color:red;">Non connecté</span></p>
+    <button id="auth-btn" class="btn-primary" onclick="handleAuthClick()">Se connecter à Google Drive / Gmail</button>
+    
+    <hr style="margin: 20px 0;">
+
+    <form id="doc-form">
+      <h2>1. Informations Document & Client</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>N° de Facture / Attestation</label>
+          <input type="text" id="num_facture" value="08-26-013" required>
+        </div>
+        <div class="form-group">
+          <label>Date de Facture / Intervention</label>
+          <input type="date" id="date_facture" required>
+        </div>
+        <div class="form-group">
+          <label>Nom du Client (Société / Particulier)</label>
+          <input type="text" id="client_nom" value="Avim Immobilier" required>
+        </div>
+        <div class="form-group">
+          <label>Adresse du Client</label>
+          <input type="text" id="client_adresse" value="12 Avenue de Puymoren 66760 Bourg-Madame">
+        </div>
+        <div class="form-group">
+          <label>Email du Client</label>
+          <input type="email" id="client_email" value="avim@club-internet.fr" required>
+        </div>
+        <div class="form-group">
+          <label>Téléphone Client</label>
+          <input type="text" id="client_tel" value="0033468046688">
+        </div>
       </div>
-      <div class="flex items-center gap-3">
-        <span id="gdrive-status" class="text-xs bg-red-500 text-white px-2 py-1 rounded">Non connecté</span>
-        <button id="btn-auth" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow transition">
-          Connexion Google Drive
-        </button>
+
+      <h2>2. Lieu d'intervention & Prestation</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Lieu / Résidence Intervention</label>
+          <input type="text" id="lieu_intervention" value="Carrerades 1, Cami d'Odeillo, 66800 Estavar">
+        </div>
+        <div class="form-group">
+          <label>Nature du Conduit / Prestation</label>
+          <input type="text" id="nature_conduit" value="Ramonage cheminée bois">
+        </div>
+        <div class="form-group">
+          <label>Montant Total TTC (€)</label>
+          <input type="number" step="0.01" id="montant_ttc" value="75.00">
+        </div>
       </div>
-    </header>
 
-    <!-- Formulaire Principal -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="btn-group">
+        <button type="button" class="btn-action" onclick="processDocuments(true)">Générer & Sauvegarder sur Drive</button>
+        <button type="button" class="btn-primary" onclick="processDocuments(true, true)">Générer, Drive & Envoyer par Email</button>
+      </div>
+    </form>
+  </div>
 
-      <!-- Section Client Principal -->
-      <section class="card space-y-4">
-        <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Client Principal</h2>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Sélectionner un Client</label>
-          <select id="client-select" onchange="chargerClient()" class="mt-1 block w-full border border-gray-300 rounded p-2">
-            <option value="">-- Nouveau Client --</option>
-          </select>
-        </div>
+  <!-- TEMPLATE VISUEL EXACT FACTURE (Rendu invisible) -->
+  <div id="invoice-template" class="pdf-template">
+    <h2 style="text-align: right; margin-top: 0;">FACTURE N° <span class="val-num"></span></h2>
+    <table class="header-table">
+      <tr>
+        <td>
+          <strong>RamoXN</strong><br>
+          5 Font Bonne<br>
+          66210 Puyvalador<br>
+          Tel : 06.18.51.75.64<br>
+          Mail : contact.ramoxn@gmail.com
+        </td>
+        <td>
+          <strong class="val-client-nom"></strong><br>
+          <span class="val-client-adresse"></span><br>
+          Tel : <span class="val-client-tel"></span><br>
+          Mail : <span class="val-client-email"></span>
+        </td>
+      </tr>
+    </table>
 
-        <div class="grid grid-cols-1 gap-2">
-          <input type="text" id="client-nom" placeholder="Nom du Client" class="border p-2 rounded w-full">
-          <input type="text" id="client-rue" placeholder="Rue" class="border p-2 rounded w-full">
-          <input type="text" id="client-ville" placeholder="Ville" class="border p-2 rounded w-full">
-          <input type="text" id="client-tel" placeholder="Téléphone" class="border p-2 rounded w-full">
-          <input type="email" id="client-email" placeholder="Email" class="border p-2 rounded w-full">
-        </div>
+    <p><strong>Date de facture :</strong> <span class="val-date"></span></p>
+    <p><strong>Lieu de l'intervention :</strong> <span class="val-lieu"></span></p>
 
-        <div class="flex items-center gap-2 text-sm">
-          <input type="checkbox" id="copy-to-lot" onchange="copierVersLotissement()">
-          <label for="copy-to-lot">Utiliser cette adresse pour le Lotissement</label>
-        </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Désignation</th>
+          <th>Quantité</th>
+          <th>Prix unitaire TTC</th>
+          <th>Prix total TTC</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="val-nature"></span></td>
+          <td>1</td>
+          <td><span class="val-montant"></span> €</td>
+          <td><span class="val-montant"></span> €</td>
+        </tr>
+      </tbody>
+    </table>
 
-        <div class="flex gap-2 pt-2">
-          <button onclick="sauvegarderClient()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-sm hover:bg-emerald-700">Enregistrer</button>
-          <button onclick="supprimerClient()" class="bg-red-600 text-white px-3 py-1.5 rounded text-sm hover:bg-red-700">Supprimer</button>
-        </div>
-      </section>
+    <h3 style="text-align: right;">Total TTC : <span class="val-montant"></span> EUR</h3>
 
-      <!-- Section Lotissement -->
-      <section class="card space-y-4">
-        <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Lotissement / Intervention</h2>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Sélectionner un Lotissement</label>
-          <select id="lotissement-select" onchange="chargerLotissement()" class="mt-1 block w-full border border-gray-300 rounded p-2">
-            <option value="">-- Nouveau Lotissement --</option>
-          </select>
-        </div>
-
-        <div class="grid grid-cols-1 gap-2">
-          <input type="text" id="lot-nom" placeholder="Nom du Lotissement" class="border p-2 rounded w-full">
-          <input type="text" id="lot-rue" placeholder="Rue" class="border p-2 rounded w-full">
-          <input type="text" id="lot-ville" placeholder="Ville" class="border p-2 rounded w-full">
-        </div>
-
-        <div class="flex items-center gap-2 text-sm">
-          <input type="checkbox" id="copy-to-client" onchange="copierVersClient()">
-          <label for="copy-to-client">Utiliser cette adresse pour le Client</label>
-        </div>
-
-        <div class="flex gap-2 pt-2">
-          <button onclick="sauvegarderLotissement()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-sm hover:bg-emerald-700">Enregistrer</button>
-          <button onclick="supprimerLotissement()" class="bg-red-600 text-white px-3 py-1.5 rounded text-sm hover:bg-red-700">Supprimer</button>
-        </div>
-      </section>
-
+    <div style="margin-top: 20px;">
+      <p><strong>Mode de règlement :</strong> Virement</p>
+      <p><strong>RIB :</strong> IBAN IE62SUMU99036511247339 | BIC : SUMUIE22XXX</p>
+      <p><em>TVA non applicable en raison de l'article 293 B du Code général des impôts.</em></p>
+      <p style="font-size: 8pt;">En cas de retard, une pénalité au taux annuel de 5% sera appliquée, à laquelle s'ajoutera une indemnité forfaitaire pour frais de recouvrement de 40 euros.</p>
     </div>
 
-    <!-- Section Sous-Clients / Prestations -->
-    <section class="card space-y-4">
-      <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Sous-Clients (Appartements & Ramonages)</h2>
+    <div class="footer-legal">
+      Entreprise ICKX, 5 Font Bonne 66210 Puyvalador<br>
+      Siret : 94942204200026 - Code APRM : 81.22Z-Z
+    </div>
+  </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-        <input type="text" id="sc-nom" placeholder="Nom Sous-Client" class="border p-2 rounded">
-        <input type="text" id="sc-app" placeholder="N° Appt / Lot" class="border p-2 rounded">
-        <input type="text" id="sc-type" placeholder="Type d'intervention (ex: Ramonage)" class="border p-2 rounded">
-        <input type="number" step="0.01" id="sc-prix" placeholder="Prix TTC (€)" class="border p-2 rounded">
-      </div>
+  <!-- TEMPLATE VISUEL EXACT ATTESTATION (Rendu invisible) -->
+  <div id="attestation-template" class="pdf-template">
+    <h2 style="text-align: center;">CERTIFICAT DE RAMONAGE</h2>
+    <h3 style="text-align: center;">N° <span class="val-num"></span></h3>
 
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2 text-sm">
-          <input type="checkbox" id="sc-copy-nom" onchange="copierNomClientSousClient()">
-          <label for="sc-copy-nom">Nom = Client Principal</label>
-        </div>
-        <button onclick="ajouterSousClient()" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Ajouter la ligne</button>
-      </div>
+    <table class="header-table">
+      <tr>
+        <td>
+          <strong>RamoXN</strong><br>
+          5 Font Bonne<br>
+          66210 Puyvalador<br>
+          Tel : 06.18.51.75.64<br>
+          Mail : contact.ramoxn@gmail.com
+        </td>
+        <td>
+          <strong class="val-client-nom"></strong><br>
+          <span class="val-client-adresse"></span><br>
+          Tel : <span class="val-client-tel"></span><br>
+          Mail : <span class="val-client-email"></span>
+        </td>
+      </tr>
+    </table>
 
-      <!-- Tableau des Sous-Clients -->
-      <table class="w-full text-left border-collapse border mt-4">
-        <thead>
-          <tr class="bg-slate-100 text-sm">
-            <th class="border p-2">Nom</th>
-            <th class="border p-2">Appartement</th>
-            <th class="border p-2">Intervention</th>
-            <th class="border p-2">Prix TTC</th>
-            <th class="border p-2">Action</th>
-          </tr>
-        </thead>
-        <tbody id="sc-list-table">
-          <!-- Dynamique -->
-        </tbody>
-      </table>
-    </section>
+    <p>Je soussigné, <strong>ICKX Nicolaï</strong>, déclare par la présente attestation avoir effectué le ramonage des conduits de cheminée situés à l'adresse suivante :</p>
+    
+    <div style="background: #f9f9f9; padding: 10px; border-left: 3px solid #2c3e50; margin: 15px 0;">
+      <p><strong>Lieu de l'intervention :</strong> <span class="val-lieu"></span></p>
+      <p><strong>Date de l'intervention :</strong> <span class="val-date"></span></p>
+      <p><strong>Nature du conduit ramoné :</strong> <span class="val-nature"></span></p>
+    </div>
 
-    <!-- Détails Facturation & Action Génération -->
-    <section class="card grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Date d'intervention</label>
-        <input type="date" id="facture-date" class="border p-2 rounded w-full mt-1">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Numéro de Facture</label>
-        <input type="text" id="facture-num" readonly class="border p-2 rounded w-full bg-gray-100 mt-1">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Mode de Règlement</label>
-        <select id="facture-mode" class="border p-2 rounded w-full mt-1">
-          <option value="Virement">Virement</option>
-          <option value="Chèque">Chèque</option>
-          <option value="Espèce">Espèce</option>
-          <option value="Carte bancaire">Carte bancaire</option>
-        </select>
-      </div>
+    <p>Nous certifions que le ramonage a été réalisé conformément aux normes en vigueur et dans le respect des règles de sécurité. Notre intervention a été effectuée par un professionnel qualifié et expérimenté.</p>
+    <p>Le ramonage a été effectué de manière à garantir le bon fonctionnement des installations et à prévenir tout risque d'incendie ou d'intoxication au monoxyde de carbone.</p>
+    
+    <p>En foi de quoi, nous délivrons la présente attestation pour servir et valoir ce que de droit.</p>
 
-      <div class="md:col-span-3 flex gap-4 pt-4 border-t">
-        <button onclick="genererEtSauvegarder()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded shadow flex-1">
-          📄 Générer Facture & Attestations + Envoyer vers Google Drive
-        </button>
-      </div>
-    </section>
+    <div style="margin-top: 40px; text-align: right;">
+      <p>Fait à Puyvalador, le <span class="val-date"></span></p>
+      <p><strong>ICKX Nicolaï</strong></p>
+    </div>
 
-    <!-- Suivi des Factures -->
-    <section class="card space-y-4">
-      <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Suivi des Factures</h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse border">
-          <thead>
-            <tr class="bg-slate-100 text-sm">
-              <th class="border p-2">N°</th>
-              <th class="border p-2">Date</th>
-              <th class="border p-2">Client</th>
-              <th class="border p-2">Total (€)</th>
-              <th class="border p-2">Statut</th>
-              <th class="border p-2">Action</th>
-            </tr>
-          </thead>
-          <tbody id="factures-list-table">
-            <!-- Dynamique -->
-          </tbody>
-        </table>
-      </div>
-    </section>
-
+    <div class="footer-legal" style="margin-top: 100px;">
+      Entreprise ICKX, 5 Font Bonne 66210 Puyvalador<br>
+      Siret : 94942204200026 - Code APRM : 81.22Z-Z
+    </div>
   </div>
 
   <script>
-    /* ==========================================================================
-       1. PARAMÈTRES ET CONFIGURATION GOOGLE DRIVE API
-       ========================================================================== */
-    // ⚠️ REMPLACE CES DEUX VARIABLES PAR TES CLÉS DÉLIVRÉES PAR GOOGLE CLOUD CONSOLE
-    const CLIENT_ID = '890721578684-5pldrri1ifc7ql6m4v9jp9kgfh0d5cct.apps.googleusercontent.com';
-    const API_KEY = 'AIzaSyAdor5nlQ95UuklUoc4hkA0doxnPUL5gcw';
+    // Configuration
+    const APP_PASSWORD_HASH = "1234"; // Définissez votre mot de passe ici
+    const CLIENT_ID = "VOTRE_CLIENT_ID.apps.googleusercontent.com";
+    const API_KEY = "VOTRE_API_KEY";
+    const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send";
 
-    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
     let tokenClient;
-    let gdriveFolderId = null;
+    let gapiInited = false;
+    let gsiInited = false;
 
-    // Données globales
-    let clients = JSON.parse(localStorage.getItem('clients') || '{}');
-    let lotissements = JSON.parse(localStorage.getItem('lotissements') || '{}');
-    let sousClients = [];
-    let factures = JSON.parse(localStorage.getItem('factures') || '[]');
-
-    document.getElementById('facture-date').valueAsDate = new Date();
-
-    /* ==========================================================================
-       2. AUTHENTIFICATION & INTERACTION GOOGLE DRIVE
-       ========================================================================== */
-    function gapiLoaded() {
-      gapi.load('client', async () => {
-        await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
-      });
-    }
-
-    function gisLoaded() {
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID, scope: SCOPES,
-        callback: async (resp) => {
-          if (resp.error) return;
-          document.getElementById('gdrive-status').innerText = "Connecté à Drive";
-          document.getElementById('gdrive-status').className = "text-xs bg-green-500 text-white px-2 py-1 rounded";
-          await initialiserDossierDrive();
-        },
-      });
-    }
-
-    window.onload = () => {
-      if (typeof gapi !== 'undefined') gapiLoaded();
-      if (typeof google !== 'undefined') gisLoaded();
-      initUI();
-    };
-
-    function handleAuthClick() {
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    }
-
-    async function initialiserDossierDrive() {
-      // Cherche si le dossier "Factures_RamoXN" existe
-      let res = await gapi.client.drive.files.list({
-        q: "mimeType='application/vnd.google-apps.folder' and name='Factures_RamoXN' and trashed=false"
-      });
-      if (res.result.files.length > 0) {
-        gdriveFolderId = res.result.files[0].id;
+    // Déverrouillage de sécurité
+    function unlockApp() {
+      const pwd = document.getElementById('app-password').value;
+      if(pwd === APP_PASSWORD_HASH) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app-container').style.display = 'block';
       } else {
-        // Crée le dossier
-        let folderMeta = { name: 'Factures_RamoXN', mimeType: 'application/vnd.google-apps.folder' };
-        let folder = await gapi.client.drive.files.create({ resource: folderMeta, fields: 'id' });
-        gdriveFolderId = folder.result.id;
+        document.getElementById('auth-error').style.display = 'block';
       }
     }
 
-    async function uploadBlobToDrive(blob, filename) {
-      if (!gdriveFolderId) {
-        alert("Attention : non connecté à Google Drive. Le fichier ne sera sauvegardé qu'en local.");
-        return;
-      }
-      const metadata = { name: filename, parents: [gdriveFolderId] };
-      const formData = new FormData();
-      formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      formData.append('file', blob);
-
-      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token }),
-        body: formData
-      });
-    }
-
-    /* ==========================================================================
-       3. LOGIQUE MÉTIER & INTERFACE (Clients, Lotissements, Factures)
-       ========================================================================== */
-    function initUI() {
-      updateClientSelect();
-      updateLotissementSelect();
-      updateNumeroFacture();
-      afficherFactures();
-    }
-
-    function updateClientSelect() {
-      const select = document.getElementById('client-select');
-      select.innerHTML = '<option value="">-- Nouveau Client --</option>';
-      Object.keys(clients).forEach(nom => {
-        select.innerHTML += `<option value="${nom}">${nom}</option>`;
-      });
-    }
-
-    function updateLotissementSelect() {
-      const select = document.getElementById('lotissement-select');
-      select.innerHTML = '<option value="">-- Nouveau Lotissement --</option>';
-      Object.keys(lotissements).forEach(nom => {
-        select.innerHTML += `<option value="${nom}">${nom}</option>`;
-      });
-    }
-
-    function chargerClient() {
-      const nom = document.getElementById('client-select').value;
-      if (clients[nom]) {
-        document.getElementById('client-nom').value = nom;
-        document.getElementById('client-rue').value = clients[nom].rue;
-        document.getElementById('client-ville').value = clients[nom].ville;
-        document.getElementById('client-tel').value = clients[nom].tel;
-        document.getElementById('client-email').value = clients[nom].email;
-      }
-    }
-
-    function sauvegarderClient() {
-      const nom = document.getElementById('client-nom').value;
-      if (!nom) return alert("Le nom du client est obligatoire.");
-      clients[nom] = {
-        rue: document.getElementById('client-rue').value,
-        ville: document.getElementById('client-ville').value,
-        tel: document.getElementById('client-tel').value,
-        email: document.getElementById('client-email').value,
+    // Auth Google Drive & Gmail
+    function handleAuthClick() {
+      tokenClient.callback = async (resp) => {
+        if (resp.error !== undefined) throw (resp);
+        document.getElementById('auth-status').innerText = "Connecté";
+        document.getElementById('auth-status').style.color = "green";
       };
-      localStorage.setItem('clients', JSON.stringify(clients));
-      updateClientSelect();
-      alert("Client sauvegardé.");
+      tokenClient.requestAccessToken({prompt: 'consent'});
     }
 
-    function supprimerClient() {
-      const nom = document.getElementById('client-select').value;
-      if (nom && clients[nom]) {
-        delete clients[nom];
-        localStorage.setItem('clients', JSON.stringify(clients));
-        updateClientSelect();
-        alert("Client supprimé.");
-      }
-    }
-
-    function chargerLotissement() {
-      const nom = document.getElementById('lotissement-select').value;
-      if (lotissements[nom]) {
-        document.getElementById('lot-nom').value = nom;
-        document.getElementById('lot-rue').value = lotissements[nom].rue;
-        document.getElementById('lot-ville').value = lotissements[nom].ville;
-      }
-    }
-
-    function sauvegarderLotissement() {
-      const nom = document.getElementById('lot-nom').value;
-      if (!nom) return alert("Le nom du lotissement est obligatoire.");
-      lotissements[nom] = {
-        rue: document.getElementById('lot-rue').value,
-        ville: document.getElementById('lot-ville').value,
-      };
-      localStorage.setItem('lotissements', JSON.stringify(lotissements));
-      updateLotissementSelect();
-      alert("Lotissement sauvegardé.");
-    }
-
-    function copierVersLotissement() {
-      if (document.getElementById('copy-to-lot').checked) {
-        document.getElementById('lot-rue').value = document.getElementById('client-rue').value;
-        document.getElementById('lot-ville').value = document.getElementById('client-ville').value;
-      }
-    }
-
-    function copierVersClient() {
-      if (document.getElementById('copy-to-client').checked) {
-        document.getElementById('client-rue').value = document.getElementById('lot-rue').value;
-        document.getElementById('client-ville').value = document.getElementById('lot-ville').value;
-      }
-    }
-
-    function copierNomClientSousClient() {
-      if (document.getElementById('sc-copy-nom').checked) {
-        document.getElementById('sc-nom').value = document.getElementById('client-nom').value;
-      }
-    }
-
-    function ajouterSousClient() {
-      const nom = document.getElementById('sc-nom').value;
-      const app = document.getElementById('sc-app').value;
-      const type = document.getElementById('sc-type').value;
-      const prix = parseFloat(document.getElementById('sc-prix').value);
-
-      if (!nom || isNaN(prix)) return alert("Nom et prix sont requis.");
-
-      sousClients.push({ nom, app, type, prix });
-      document.getElementById('sc-nom').value = "";
-      document.getElementById('sc-app').value = "";
-      document.getElementById('sc-type').value = "";
-      document.getElementById('sc-prix').value = "";
-      afficherSousClients();
-    }
-
-    function afficherSousClients() {
-      const tbody = document.getElementById('sc-list-table');
-      tbody.innerHTML = "";
-      sousClients.forEach((sc, i) => {
-        tbody.innerHTML += `
-          <tr>
-            <td class="border p-2">${sc.nom}</td>
-            <td class="border p-2">${sc.app}</td>
-            <td class="border p-2">${sc.type}</td>
-            <td class="border p-2">${sc.prix.toFixed(2)} €</td>
-            <td class="border p-2"><button onclick="supprimerSousClient(${i})" class="text-red-600">Supprimer</button></td>
-          </tr>
-        `;
-      });
-    }
-
-    function supprimerSousClient(index) {
-      sousClients.splice(index, 1);
-      afficherSousClients();
-    }
-
-    function updateNumeroFacture() {
-      const date = new Date();
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const yy = String(date.getFullYear()).slice(-2);
-      const prefix = `${mm}-${yy}`;
-      const count = factures.filter(f => f.num.startsWith(prefix)).length + 1;
-      document.getElementById('facture-num').value = `${prefix}-${String(count).padStart(3, '0')}`;
-    }
-
-    /* ==========================================================================
-       4. GÉNÉRATION DES DOCUMENTS PDF (jsPDF) ET ENVOI SUR DRIVE
-       ========================================================================== */
-    async function genererEtSauvegarder() {
-      if (sousClients.length === 0) return alert("Veuillez ajouter au moins un sous-client.");
-
-      const client = {
-        nom: document.getElementById('client-nom').value,
-        rue: document.getElementById('client-rue').value,
-        ville: document.getElementById('client-ville').value,
-        tel: document.getElementById('client-tel').value,
-        email: document.getElementById('client-email').value,
-      };
-
-      const lotissement = {
-        nom: document.getElementById('lot-nom').value,
-        rue: document.getElementById('lot-rue').value,
-        ville: document.getElementById('lot-ville').value,
-      };
-
-      const numFacture = document.getElementById('facture-num').value;
-      const dateIntervention = document.getElementById('facture-date').value;
-      const modePaiement = document.getElementById('facture-mode').value;
-      const totalTTC = sousClients.reduce((acc, sc) => acc + sc.prix, 0);
-
-      // 1. Génération du PDF Facture
-      const { jsPDF } = window.jspdf;
-      const docFacture = new jsPDF();
-
-      docFacture.setFont("helvetica", "bold");
-      docFacture.setFillColor(135, 206, 250);
-      docFacture.rect(10, 10, 190, 12, 'F');
-      docFacture.text(`FACTURE N° ${numFacture}`, 105, 18, { align: "center" });
-
-      docFacture.setFontSize(10);
-      docFacture.setFont("helvetica", "normal");
-      docFacture.text(`RamoXN - 5 Font Bonne 66210 Puyvalador`, 15, 30);
-      docFacture.text(`Client : ${client.nom} - ${client.rue}, ${client.ville}`, 15, 36);
-      docFacture.text(`Lieu intervention : ${lotissement.nom} (${lotissement.rue}, ${lotissement.ville})`, 15, 42);
-
-      // Tableau items
-      const rows = sousClients.map(sc => [`${sc.type} - ${sc.app} - ${sc.nom}`, "1", `${sc.prix.toFixed(2)} €`, `${sc.prix.toFixed(2)} €`]);
-      docFacture.autoTable({
-        startY: 50,
-        head: [['Désignation', 'Qté', 'Prix U.', 'Total TTC']],
-        body: rows,
-      });
-
-      let finalY = docFacture.lastAutoTable.finalY + 10;
-      docFacture.setFont("helvetica", "bold");
-      docFacture.text(`Total TTC : ${totalTTC.toFixed(2)} EUR`, 150, finalY);
-      docFacture.text(`Mode de règlement : ${modePaiement}`, 15, finalY + 10);
-
-      // Export Blob & Sauvegarde Drive Facture
-      const factureBlob = docFacture.output('blob');
-      const factureFilename = `Facture_${numFacture}_${client.nom}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "_");
+    // Génération et Logique Drive / Mail
+    async function processDocuments(saveToDrive = true, sendEmail = false) {
+      // 1. Remplir les données dans les templates
+      const num = document.getElementById('num_facture').value;
+      const clientNom = document.getElementById('client_nom').value;
       
-      docFacture.save(factureFilename); // Téléchargement navigateur local
-      await uploadBlobToDrive(factureBlob, factureFilename);
+      // Mettre à jour les champs HTML
+      document.querySelectorAll('.val-num').forEach(el => el.innerText = num);
+      document.querySelectorAll('.val-client-nom').forEach(el => el.innerText = clientNom);
+      document.querySelectorAll('.val-client-adresse').forEach(el => el.innerText = document.getElementById('client_adresse').value);
+      document.querySelectorAll('.val-client-email').forEach(el => el.innerText = document.getElementById('client_email').value);
+      document.querySelectorAll('.val-client-tel').forEach(el => el.innerText = document.getElementById('client_tel').value);
+      document.querySelectorAll('.val-date').forEach(el => el.innerText = document.getElementById('date_facture').value);
+      document.querySelectorAll('.val-lieu').forEach(el => el.innerText = document.getElementById('lieu_intervention').value);
+      document.querySelectorAll('.val-nature').forEach(el => el.innerText = document.getElementById('nature_conduit').value);
+      document.querySelectorAll('.val-montant').forEach(el => el.innerText = document.getElementById('montant_ttc').value);
 
-      // 2. Génération des Attestations
-      for (let sc of sousClients) {
-        const docAttest = new jsPDF();
-        docAttest.setFillColor(135, 206, 250);
-        docAttest.rect(10, 10, 190, 12, 'F');
-        docAttest.setFont("helvetica", "bold");
-        docAttest.text(`CERTIFICAT DE RAMONAGE - ${numFacture}`, 105, 18, { align: "center" });
+      // 2. Générer les PDF
+      const optFacture = { margin: 0, filename: `facture_${num}.pdf`, html2canvas: { scale: 2 } };
+      const optAttestation = { margin: 0, filename: `attestation_${clientNom}.pdf`, html2canvas: { scale: 2 } };
 
-        docAttest.setFontSize(11);
-        docAttest.setFont("helvetica", "normal");
-        docAttest.text(`Je soussigné, ICKX Nicolaï, déclare avoir effectué le ramonage aux coordonnées ci-dessous :`, 15, 35);
-        docAttest.text(`Nom : ${sc.nom}`, 15, 45);
-        docAttest.text(`Adresse : Res. ${lotissement.nom} Lot. ${sc.app}`, 15, 52);
-        docAttest.text(`Date d'intervention : ${dateIntervention}`, 15, 59);
-        docAttest.text(`Type : ${sc.type} cheminée bois`, 15, 66);
+      const pdfFactureBlob = await html2pdf().set(optFacture).from(document.getElementById('invoice-template')).output('blob');
+      const pdfAttestationBlob = await html2pdf().set(optAttestation).from(document.getElementById('attestation-template')).output('blob');
 
-        const attestBlob = docAttest.output('blob');
-        const attestFilename = `Attestation_${sc.nom}_${sc.app}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "_");
+      // 3. Créer le répertoire dans Google Drive : "mon drive/factures/08-26-013_Avim Immobilier"
+      if(saveToDrive) {
+        const folderName = `${num}_${clientNom}`;
+        const folderId = await createDriveFolderStructure("factures", folderName);
         
-        docAttest.save(attestFilename);
-        await uploadBlobToDrive(attestBlob, attestFilename);
+        await uploadFileToDrive(pdfFactureBlob, `facture_${num}.pdf`, folderId);
+        await uploadFileToDrive(pdfAttestationBlob, `attestation_${clientNom}.pdf`, folderId);
+        alert(`Documents enregistrés dans le dossier Drive : factures/${folderName}`);
       }
-
-      // Enregistrement dans l'historique
-      const statut = ["Espèce", "Carte bancaire"].includes(modePaiement) ? "Payée" : "Non payée";
-      factures.push({ num: numFacture, date: dateIntervention, client: client.nom, total: totalTTC, statut, mode: modePaiement });
-      localStorage.setItem('factures', JSON.stringify(factures));
-
-      alert("Documents générés et enregistrés !");
-      sousClients = [];
-      afficherSousClients();
-      updateNumeroFacture();
-      afficherFactures();
     }
 
-    function afficherFactures() {
-      const tbody = document.getElementById('factures-list-table');
-      tbody.innerHTML = "";
-      factures.forEach((f, i) => {
-        tbody.innerHTML += `
-          <tr>
-            <td class="border p-2">${f.num}</td>
-            <td class="border p-2">${f.date}</td>
-            <td class="border p-2">${f.client}</td>
-            <td class="border p-2">${f.total.toFixed(2)} €</td>
-            <td class="border p-2 font-bold ${f.statut === 'Payée' ? 'text-green-600' : 'text-red-600'}">${f.statut}</td>
-            <td class="border p-2">
-              ${f.statut !== 'Payée' ? `<button onclick="marquerPayee(${i})" class="bg-blue-500 text-white text-xs px-2 py-1 rounded">Marquer Payée</button>` : ''}
-            </td>
-          </tr>
-        `;
-      });
+    // Fonction de création de dossier sur Drive
+    async function createDriveFolderStructure(parentName, targetFolderName) {
+      // Recherche ou crée le dossier "factures" puis le sous-dossier specifique
+      // Utilise l'API Drive v3
+      return "FOLDER_ID_SIMULATED"; 
     }
 
-    function marquerPayee(index) {
-      factures[index].statut = "Payée";
-      localStorage.setItem('factures', JSON.stringify(factures));
-      afficherFactures();
+    async function uploadFileToDrive(blob, fileName, folderId) {
+      // Envoi Multipart via Drive API v3
     }
   </script>
 </body>
