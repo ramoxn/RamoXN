@@ -305,6 +305,28 @@
       tokenClient.requestAccessToken({ prompt: 'consent' });
     }
 
+    // Connexion automatique après saisie du bon code de sécurité.
+    async function connecterGoogleDriveAutomatiquement() {
+      // Les bibliothèques Google peuvent mettre quelques instants à se charger.
+      if (typeof google === 'undefined' || !tokenClient) {
+        let essais = 0;
+        const attente = setInterval(() => {
+          essais++;
+          if (typeof google !== 'undefined' && tokenClient) {
+            clearInterval(attente);
+            tokenClient.requestAccessToken({ prompt: 'none' });
+          } else if (essais >= 20) {
+            clearInterval(attente);
+            document.getElementById('gdrive-status').innerText = 'Connexion Google requise';
+            document.getElementById('gdrive-status').className = 'text-xs bg-orange-500 text-white px-2 py-1 rounded';
+          }
+        }, 250);
+        return;
+      }
+
+      tokenClient.requestAccessToken({ prompt: 'none' });
+    }
+
     async function initialiserDossierDrive() {
       // Cherche si le dossier "Factures_RamoXN" existe
       let res = await gapi.client.drive.files.list({
@@ -787,6 +809,11 @@
       if (champ.value === CODE_SECURITE) {
         document.getElementById("security-screen").style.display = "none";
         erreur.textContent = "";
+
+        // Connexion automatique à Google Drive après le déverrouillage.
+        // "none" permet de réutiliser l'autorisation Google déjà accordée
+        // sans redemander le consentement à chaque ouverture.
+        connecterGoogleDriveAutomatiquement();
       } else {
         erreur.textContent = "Code incorrect.";
         champ.value = "";
