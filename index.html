@@ -20,8 +20,73 @@
     body { background-color: #f3f4f6; }
     .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
   </style>
+
+
+  <!-- SÉCURITÉ À L'OUVERTURE -->
+  <style>
+    #security-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      padding: 20px;
+    }
+    #security-box {
+      width: 100%;
+      max-width: 380px;
+      background: white;
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.35);
+      text-align: center;
+    }
+    #security-box input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+      font-size: 18px;
+      text-align: center;
+      outline: none;
+    }
+    #security-box input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+    #security-box button {
+      width: 100%;
+      margin-top: 12px;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px;
+      background: #2563eb;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #security-error {
+      min-height: 20px;
+      margin-top: 10px;
+      color: #dc2626;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body class="p-4 md:p-8 font-sans">
+
+  <!-- ÉCRAN DE SÉCURITÉ : le mot de passe est modifiable ici -->
+  <div id="security-screen">
+    <div id="security-box">
+      <div style="font-size:42px; margin-bottom:8px;">🔐</div>
+      <h2 style="font-size:24px; font-weight:700; margin:0; color:#0f172a;">RamoXN</h2>
+      <p style="margin:8px 0 0; color:#64748b;">Code de sécurité</p>
+      <input id="security-password" type="password" placeholder="Entrez le code" autocomplete="off">
+      <button type="button" onclick="verifierCodeSecurite()">Déverrouiller</button>
+      <div id="security-error"></div>
+    </div>
+  </div>
 
   <div class="max-w-6xl mx-auto space-y-6">
 
@@ -29,7 +94,7 @@
     <header class="card flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 text-white">
       <div>
         <h1 class="text-2xl font-bold">RamoXN - Facturation & Ramonage</h1>
-        <p class="text-sm text-slate-300">Application web connectée à Google Drive pdf</p>
+        <p class="text-sm text-slate-300">Application web connectée à Google Drive</p>
       </div>
       <div class="flex items-center gap-3">
         <span id="gdrive-status" class="text-xs bg-red-500 text-white px-2 py-1 rounded">Non connecté</span>
@@ -704,6 +769,40 @@
       localStorage.setItem('factures', JSON.stringify(factures));
       afficherFactures();
     }
+  </script>
+
+
+  <!-- CODE DE SÉCURITÉ -->
+  <script>
+    // ============================================================
+    // MODIFIE UNIQUEMENT CETTE LIGNE POUR CHANGER LE CODE
+    // Exemple : const CODE_SECURITE = "1234";
+    // ============================================================
+    const CODE_SECURITE = "1234";
+
+    function verifierCodeSecurite() {
+      const champ = document.getElementById("security-password");
+      const erreur = document.getElementById("security-error");
+
+      if (champ.value === CODE_SECURITE) {
+        document.getElementById("security-screen").style.display = "none";
+        erreur.textContent = "";
+      } else {
+        erreur.textContent = "Code incorrect.";
+        champ.value = "";
+        champ.focus();
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      const champ = document.getElementById("security-password");
+      if (champ) {
+        champ.focus();
+        champ.addEventListener("keydown", function(event) {
+          if (event.key === "Enter") verifierCodeSecurite();
+        });
+      }
+    });
   </script>
 </body>
 </html>
