@@ -47,7 +47,7 @@
 <section id="invoices" class="pg"><h1>Factures</h1><div class="panel"><div class="table"><table><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Total</th><th>État</th><th>Actions</th></tr></thead><tbody id="invoiceList"></tbody></table></div></div></section>
 
 <section id="settings" class="pg"><h1>Google Drive</h1>
-<div class="panel"><h2>Connexion</h2><p>Entre ici le <b>Client ID OAuth Web</b> de ton projet Google Cloud.</p>
+<div class="panel"><h2>Connexion</h2><p>Entre ici le <b>Client ID OAuth Web</b> de ton projet Google Cloud.<br><small>Il doit se terminer par <b>.apps.googleusercontent.com</b>. Ton adresse Gmail n’est pas un Client ID.</small></p>
 <label>Client ID Google<input id="clientId" placeholder="1234567890-xxxxx.apps.googleusercontent.com"></label>
 <div class="actions"><button class="primary" onclick="saveClientId()">Enregistrer</button><button class="primary" onclick="connectGoogle()">🔐 Se connecter</button><button onclick="disconnectGoogle()">Déconnecter</button></div>
 <p id="status" class="muted"></p></div>
