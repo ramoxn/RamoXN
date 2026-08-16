@@ -423,199 +423,125 @@
     /* ==========================================================================
        4. GÉNÉRATION DES DOCUMENTS PDF (jsPDF) ET ENVOI SUR DRIVE
        ========================================================================== */
-    /* ==========================================================================
-   GÉNÉRATION PDF : FACTURE ET ATTESTATIONS (Mise en page exacte)
-   ========================================================================== */
+    
 
-function genererFacturePDF(doc, data) {
-  // En-tête : Cadre Titre Facture
-  doc.setFillColor(135, 206, 250);
-  doc.rect(10, 10, 190, 10, 'F');
-  doc.rect(10, 10, 190, 10, 'S');
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(`FACTURE N° ${data.factureNum}`, 105, 17, { align: "center" });
+    
+    async function genererEtSauvegarder() {
+      if (sousClients.length === 0) return alert("Veuillez ajouter au moins un sous-client.");
 
-  // Cadre double pour l'émetteur et le client
-  doc.setLineWidth(0.5);
-  doc.rect(10, 25, 190, 45);
-  doc.setLineWidth(0.2);
-  doc.rect(12, 27, 186, 41);
-  doc.line(105, 27, 105, 68);
+      const client = {
+        nom: document.getElementById('client-nom').value,
+        rue: document.getElementById('client-rue').value,
+        ville: document.getElementById('client-ville').value,
+        tel: document.getElementById('client-tel').value,
+        email: document.getElementById('client-email').value,
+      };
 
-  // Bloc Gauche : RamoXN
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text("RamoXN", 57, 34, { align: "center" });
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.text("5 Font Bonne", 57, 41, { align: "center" });
-  doc.text("66210 Puyvalador", 57, 48, { align: "center" });
-  doc.text("Tel : 06.18.51.75.64", 57, 55, { align: "center" });
-  doc.text("Mail : contact.ramoxn@gmail.com", 57, 62, { align: "center" });
+      const lotissement = {
+        nom: document.getElementById('lot-nom').value,
+        rue: document.getElementById('lot-rue').value,
+        ville: document.getElementById('lot-ville').value,
+      };
 
-  // Bloc Droite : Client
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text(`${data.client.nom}`, 147, 34, { align: "center" });
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.text(`${data.client.rue}`, 147, 41, { align: "center" });
-  doc.text(`${data.client.ville}`, 147, 48, { align: "center" });
-  doc.text(`Tel : ${data.client.tel}`, 147, 55, { align: "center" });
-  doc.text(`Mail : ${data.client.email}`, 147, 62, { align: "center" });
+      const numFacture = document.getElementById('facture-num').value;
+      const dateIntervention = document.getElementById('facture-date').value;
+      const modePaiement = document.getElementById('facture-mode').value;
+      const totalTTC = sousClients.reduce((acc, sc) => acc + sc.prix, 0);
 
-  // Date de facture
-  doc.setFillColor(135, 206, 250);
-  doc.rect(10, 75, 100, 8, 'F');
-  doc.rect(10, 75, 100, 8, 'S');
-  doc.setFontSize(10);
-  doc.text(`Date de facture : ${data.dateFacture}`, 60, 80.5, { align: "center" });
+      // 1. Génération du PDF Facture
+      const { jsPDF } = window.jspdf;
+      const docFacture = new jsPDF();
 
-  // Lieu d'intervention
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Lieu de l'intervention : ${data.lotissement.nom}`, 10, 90);
-  doc.text(`Adresse : ${data.lotissement.rue}, ${data.lotissement.ville}`, 10, 96);
+      docFacture.setFont("helvetica", "bold");
+      docFacture.setFillColor(135, 206, 250);
+      docFacture.rect(10, 10, 190, 12, 'F');
+      docFacture.text(`FACTURE N° ${numFacture}`, 105, 18, { align: "center" });
 
-  // Tableau des sous-clients / prestations
-  const bodyRows = data.sousClients.map(sc => {
-    const designation = `${sc.type} - ${sc.app} - ${sc.nom}`.substring(0, 45);
-    return [designation, "1", parseFloat(sc.prix).toFixed(2), parseFloat(sc.prix).toFixed(2)];
-  });
+      docFacture.setFontSize(10);
+      docFacture.setFont("helvetica", "normal");
+      docFacture.text(`RamoXN - 5 Font Bonne 66210 Puyvalador`, 15, 30);
+      docFacture.text(`Client : ${client.nom} - ${client.rue}, ${client.ville}`, 15, 36);
+      docFacture.text(`Lieu intervention : ${lotissement.nom} (${lotissement.rue}, ${lotissement.ville})`, 15, 42);
 
-  doc.autoTable({
-    startY: 102,
-    head: [['Désignation', 'Quantité', 'Prix unitaire TTC', 'Prix total TTC']],
-    body: bodyRows,
-    theme: 'grid',
-    headStyles: { fillColor: [135, 206, 250], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-    columnStyles: {
-      0: { halign: 'left', cellWidth: 100 },
-      1: { halign: 'center', cellWidth: 30 },
-      2: { halign: 'center', cellWidth: 30 },
-      3: { halign: 'center', cellWidth: 30 }
+      // Tableau items
+      const rows = sousClients.map(sc => [`${sc.type} - ${sc.app} - ${sc.nom}`, "1", `${sc.prix.toFixed(2)} €`, `${sc.prix.toFixed(2)} €`]);
+      docFacture.autoTable({
+        startY: 50,
+        head: [['Désignation', 'Qté', 'Prix U.', 'Total TTC']],
+        body: rows,
+      });
+
+      let finalY = docFacture.lastAutoTable.finalY + 10;
+      docFacture.setFont("helvetica", "bold");
+      docFacture.text(`Total TTC : ${totalTTC.toFixed(2)} EUR`, 150, finalY);
+      docFacture.text(`Mode de règlement : ${modePaiement}`, 15, finalY + 10);
+
+      // Export Blob & Sauvegarde Drive Facture
+      const factureBlob = docFacture.output('blob');
+      const factureFilename = `Facture_${numFacture}_${client.nom}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "_");
+      
+      docFacture.save(factureFilename); // Téléchargement navigateur local
+      await uploadBlobToDrive(factureBlob, factureFilename);
+
+      // 2. Génération des Attestations
+      for (let sc of sousClients) {
+        const docAttest = new jsPDF();
+        docAttest.setFillColor(135, 206, 250);
+        docAttest.rect(10, 10, 190, 12, 'F');
+        docAttest.setFont("helvetica", "bold");
+        docAttest.text(`CERTIFICAT DE RAMONAGE - ${numFacture}`, 105, 18, { align: "center" });
+
+        docAttest.setFontSize(11);
+        docAttest.setFont("helvetica", "normal");
+        docAttest.text(`Je soussigné, ICKX Nicolaï, déclare avoir effectué le ramonage aux coordonnées ci-dessous :`, 15, 35);
+        docAttest.text(`Nom : ${sc.nom}`, 15, 45);
+        docAttest.text(`Adresse : Res. ${lotissement.nom} Lot. ${sc.app}`, 15, 52);
+        docAttest.text(`Date d'intervention : ${dateIntervention}`, 15, 59);
+        docAttest.text(`Type : ${sc.type} cheminée bois`, 15, 66);
+
+        const attestBlob = docAttest.output('blob');
+        const attestFilename = `Attestation_${sc.nom}_${sc.app}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "_");
+        
+        docAttest.save(attestFilename);
+        await uploadBlobToDrive(attestBlob, attestFilename);
+      }
+
+      // Enregistrement dans l'historique
+      const statut = ["Espèce", "Carte bancaire"].includes(modePaiement) ? "Payée" : "Non payée";
+      factures.push({ num: numFacture, date: dateIntervention, client: client.nom, total: totalTTC, statut, mode: modePaiement });
+      localStorage.setItem('factures', JSON.stringify(factures));
+
+      alert("Documents générés et enregistrés !");
+      sousClients = [];
+      afficherSousClients();
+      updateNumeroFacture();
+      afficherFactures();
     }
-  });
 
-  let finalY = doc.lastAutoTable.finalY;
+    function afficherFactures() {
+      const tbody = document.getElementById('factures-list-table');
+      tbody.innerHTML = "";
+      factures.forEach((f, i) => {
+        tbody.innerHTML += `
+          <tr>
+            <td class="border p-2">${f.num}</td>
+            <td class="border p-2">${f.date}</td>
+            <td class="border p-2">${f.client}</td>
+            <td class="border p-2">${f.total.toFixed(2)} €</td>
+            <td class="border p-2 font-bold ${f.statut === 'Payée' ? 'text-green-600' : 'text-red-600'}">${f.statut}</td>
+            <td class="border p-2">
+              ${f.statut !== 'Payée' ? `<button onclick="marquerPayee(${i})" class="bg-blue-500 text-white text-xs px-2 py-1 rounded">Marquer Payée</button>` : ''}
+            </td>
+          </tr>
+        `;
+      });
+    }
 
-  // Ligne Total TTC
-  doc.rect(10, finalY, 160, 8);
-  doc.text("Total TTC", 165, finalY + 5.5, { align: "right" });
-  doc.rect(170, finalY, 30, 8);
-  doc.text(`${data.totalTTC.toFixed(2)} EUR`, 185, finalY + 5.5, { align: "center" });
-
-  // Règlements & RIB
-  let posY = finalY + 18;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(`Mode de règlement : ${data.modePaiement}`, 10, posY);
-  doc.text("RIB : IBAN IE62SUMU99036511247339", 10, posY + 6);
-  doc.text("BIC : SUMUIE22XXX", 10, posY + 12);
-
-  // Pied de page légal
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text("TVA non applicable en raison de l'article 293 B du Code général des impôts", 105, 255, { align: "center" });
-  doc.text("En cas de retard, une pénalité au taux annuel de 5 pourcent sera appliquée,", 105, 260, { align: "center" });
-  doc.text("à laquelle s'ajoutera une indemnité forfaitaire pour frais de recouvrement de 40 euros.", 105, 265, { align: "center" });
-  doc.text("Entreprise ICKX, 5 Font Bonne 66210 Puyvalador", 105, 272, { align: "center" });
-  doc.text("Siret : 94942204200026 - Code APRM : 81.22Z-Z", 105, 277, { align: "center" });
-}
-
-function genererAttestationPDF(doc, data, sc) {
-  // En-tête : Titre Certificat
-  doc.setFillColor(135, 206, 250);
-  doc.rect(10, 10, 190, 10, 'F');
-  doc.rect(10, 10, 190, 10, 'S');
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("CERTIFICAT DE RAMONAGE", 105, 17, { align: "center" });
-
-  // Numéro de facture
-  doc.rect(10, 23, 20, 7);
-  doc.setFontSize(9);
-  doc.text(`${data.factureNum}`, 20, 27.5, { align: "center" });
-
-  // Cadre Émetteur / Destinataire
-  doc.setLineWidth(0.5);
-  doc.rect(10, 33, 190, 45);
-  doc.setLineWidth(0.2);
-  doc.rect(12, 35, 186, 41);
-  doc.line(105, 35, 105, 76);
-
-  // Gauche
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text("RamoXN", 57, 42, { align: "center" });
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.text("5 Font Bonne", 57, 49, { align: "center" });
-  doc.text("66210 Puyvalador", 57, 56, { align: "center" });
-  doc.text("Tel : 06.18.51.75.64", 57, 63, { align: "center" });
-  doc.text("Mail : contact.ramoxn@gmail.com", 57, 70, { align: "center" });
-
-  // Droite
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text(`${sc.nom}`, 147, 42, { align: "center" });
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.text(`${data.lotissement.rue}`, 147, 49, { align: "center" });
-  doc.text(`${data.lotissement.ville}`, 147, 56, { align: "center" });
-  doc.text("Tel : +XXXXXXXXXXXXXX", 147, 63, { align: "center" });
-  doc.text("Mail : XXXXXXXXXXXXXX", 147, 70, { align: "center" });
-
-  // Texte déclaration
-  doc.setFontSize(11);
-  doc.text("Je soussigné, ICKX Nicolaï, déclare par la présente attestation avoir effectué le", 105, 87, { align: "center" });
-  doc.text("ramonage des conduits de cheminée situés à l'adresse suivante :", 105, 93, { align: "center" });
-
-  // Cadre Détails Intervention
-  doc.rect(10, 100, 190, 35);
-  doc.line(105, 100, 105, 135);
-
-  doc.text("Résidence, Lot", 57, 107, { align: "center" });
-  doc.text(`Res. ${data.lotissement.nom} Lot. ${sc.app}`, 147, 107, { align: "center" });
-
-  doc.text("Adresse du lieu", 57, 114, { align: "center" });
-  doc.text(`${data.lotissement.rue}`, 147, 114, { align: "center" });
-  doc.text(`${data.lotissement.ville}`, 147, 120, { align: "center" });
-
-  doc.text("Date de l'intervention", 57, 126, { align: "center" });
-  doc.text(`${data.dateIntervention}`, 147, 126, { align: "center" });
-
-  doc.text("Nature du conduits ramoné", 57, 132, { align: "center" });
-  doc.text(`${sc.type} cheminée bois`, 147, 132, { align: "center" });
-
-  // Mentions Légales
-  doc.text("Nous certifions que le ramonage a été réalisé conformément aux normes en vigueur et", 105, 145, { align: "center" });
-  doc.text("dans le respect des règles de sécurité. Notre intervention a été effectuée par un", 105, 150, { align: "center" });
-  doc.text("professionnel qualifié et expérimenté.", 105, 155, { align: "center" });
-
-  doc.text("Le ramonage a été effectué de manière à garantir le bon fonctionnement des installations", 105, 165, { align: "center" });
-  doc.text("et à prévenir tout risque d'incendie ou d'intoxication au monoxyde de carbone.", 105, 170, { align: "center" });
-
-  doc.text("En foi de quoi, nous délivrons la présente attestation pour servir et valoir ce que de droit.", 105, 182, { align: "center" });
-
-  // Fait à / Signature
-  doc.text(`Fait à Puyvalador, le ${data.dateFacture}`, 40, 215, { align: "center" });
-  doc.text("ICKX Nicolaï", 40, 222, { align: "center" });
-
-  // Signature image (Si présente dans le dossier Data/sing.jpg ou Base64)
-  if (data.signatureBase64) {
-    doc.addImage(data.signatureBase64, 'JPEG', 15, 228, 50, 20);
-  }
-
-  // Pied de page
-  doc.setFontSize(9);
-  doc.text("Entreprise ICKX, 5 Font Bonne 66210 Puyvalador", 105, 272, { align: "center" });
-  doc.text("Siret : 94942204200026 - Code APRM : 81.22Z-Z", 105, 277, { align: "center" });
-}
-
-
-   
+    function marquerPayee(index) {
+      factures[index].statut = "Payée";
+      localStorage.setItem('factures', JSON.stringify(factures));
+      afficherFactures();
+    }
   </script>
 </body>
 </html>
