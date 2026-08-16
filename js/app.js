@@ -98,7 +98,23 @@ function connectGoogle(){
  tokenClient=google.accounts.oauth2.initTokenClient({client_id:db.settings.clientId,scope:GOOGLE_SCOPES,callback:async(resp)=>{
    if(resp.error){console.error(resp);msg("Connexion Google refusée : "+resp.error);return}
    accessToken=resp.access_token;render();
-   try{await ensureDriveFolder();await syncNow(false);msg("🟢 Google Drive + Gmail connectés")}catch(e){console.error(e);msg("Google connecté mais Drive inaccessible : "+e.message)}
+   try{
+     await ensureDriveFolder();
+     await findDataFile();
+     // IMPORTANT: never overwrite an existing Drive database with an empty local database.
+     if(dataFileId && (!db.invoices || db.invoices.length===0)){
+       const rr=await googleFetch(`https://www.googleapis.com/drive/v3/files/${dataFileId}?alt=media`);
+       const remote=await rr.json();
+       if(remote && Array.isArray(remote.invoices)){
+         db=remote;
+         localStorage.setItem(STORE,JSON.stringify(db));
+       }
+     }
+     render();
+     await syncNow(false);
+     render();
+     msg("🟢 Google Drive + Gmail connectés");
+   }catch(e){console.error(e);render();msg("Google connecté mais Drive inaccessible : "+(e.message||e))}
  }});
  tokenClient.requestAccessToken({prompt:"consent"});
 }
@@ -114,7 +130,16 @@ function b64url(s){return s.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g
 async function blobB64(blob){return b64url(bytesToB64(await blob.arrayBuffer()))}
 async function sendInvoiceEmail(x,to){let attachments=[{name:"Facture_"+x.number+".pdf",mime:"application/pdf",b64:await blobB64(makePDF(x,"facture"))}];for(const a of x.lines)attachments.push({name:"Attestation_"+x.number+"_"+safe(a.app)+".pdf",mime:"application/pdf",b64:await blobB64(makePDF(x,"attestation",a))});let boundary="RamoXN-Mail";let parts=["From: me","To: "+to,"Subject: RamoXN - Facture "+x.number,"MIME-Version: 1.0","Content-Type: multipart/mixed; boundary=\""+boundary+"\"","","--"+boundary,"Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: 8bit","","Bonjour,\r\n\r\nVeuillez trouver en pièces jointes votre facture "+x.number+" ainsi que votre/vos attestation(s) de ramonage.\r\n\r\nCordialement,\r\nRamoXN"];
  for(const a of attachments)parts.push("--"+boundary,"Content-Type: "+a.mime+"; name=\""+a.name+"\"","Content-Disposition: attachment; filename=\""+a.name+"\"","Content-Transfer-Encoding: base64","",a.b64);parts.push("--"+boundary+"--");let raw=b64url(bytesToB64(new TextEncoder().encode(parts.join("\r\n"))));let r=await googleFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({raw})}).then(x=>x.json());x.mailSent=true;x.mailId=r.id||null}
-async function restoreFromDrive(){if(!accessToken){msg("Connecte Google d'abord");return}await ensureDriveFolder();await findDataFile();if(!dataFileId){msg("Aucune sauvegarde RamoXN trouvée");return}let r=await googleFetch(`https://www.googleapis.com/drive/v3/files/${dataFileId}?alt=media`);db=await r.json();localStorage.setItem(STORE,JSON.stringify(db));render();msg("Données restaurées depuis Drive")}
+async function restoreFromDrive(){
+ if(!accessToken){msg("Connecte Google d'abord");return}
+ await ensureDriveFolder();await findDataFile();
+ if(!dataFileId){msg("Aucune sauvegarde RamoXN trouvée");return}
+ let r=await googleFetch(`https://www.googleapis.com/drive/v3/files/${dataFileId}?alt=media`);
+ let remote=await r.json();
+ if(!remote || !Array.isArray(remote.invoices)) throw new Error("RamoXN_data.json invalide");
+ db=remote;localStorage.setItem(STORE,JSON.stringify(db));render();
+ msg(`Données restaurées : ${db.invoices.length} facture(s)`);
+}
 
 function exportBackup(){download("RamoXN_sauvegarde.json",new Blob([JSON.stringify(db,null,2)],{type:"application/json"}))}
 function importBackup(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);save();msg("Sauvegarde importée")}catch{msg("Fichier invalide")}};r.readAsText(f)}
