@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RamoXN - Gestion des Factures et Attestations</title>
+
+  <!-- Tailwind CSS pour un design moderne et responsive -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- jsPDF & AutoTable pour générer des PDF côté navigateur -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <!-- API Google Identity Services et Google Drive JS SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+
+  <style>
+    body { background-color: #f3f4f6; }
+    .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body class="p-4 md:p-8 font-sans">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- En-tête / Connexion Google -->
+    <header class="card flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 text-white">
+      <div>
+        <h1 class="text-2xl font-bold">RamoXN - Facturation & Ramonage</h1>
+        <p class="text-sm text-slate-300">Application web connectée à Google Drive</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="gdrive-status" class="text-xs bg-red-500 text-white px-2 py-1 rounded">Non connecté</span>
+        <button id="btn-auth" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow transition">
+          Connexion Google Drive
+        </button>
+      </div>
+    </header>
+
+    <!-- Formulaire Principal -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- Section Client Principal -->
+      <section class="card space-y-4">
+        <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Client Principal</h2>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Sélectionner un Client</label>
+          <select id="client-select" onchange="chargerClient()" class="mt-1 block w-full border border-gray-300 rounded p-2">
+            <option value="">-- Nouveau Client --</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 gap-2">
+          <input type="text" id="client-nom" placeholder="Nom du Client" class="border p-2 rounded w-full">
+          <input type="text" id="client-rue" placeholder="Rue" class="border p-2 rounded w-full">
+          <input type="text" id="client-ville" placeholder="Ville" class="border p-2 rounded w-full">
+          <input type="text" id="client-tel" placeholder="Téléphone" class="border p-2 rounded w-full">
+          <input type="email" id="client-email" placeholder="Email" class="border p-2 rounded w-full">
+        </div>
+
+        <div class="flex items-center gap-2 text-sm">
+          <input type="checkbox" id="copy-to-lot" onchange="copierVersLotissement()">
+          <label for="copy-to-lot">Utiliser cette adresse pour le Lotissement</label>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button onclick="sauvegarderClient()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-sm hover:bg-emerald-700">Enregistrer</button>
+          <button onclick="supprimerClient()" class="bg-red-600 text-white px-3 py-1.5 rounded text-sm hover:bg-red-700">Supprimer</button>
+        </div>
+      </section>
+
+      <!-- Section Lotissement -->
+      <section class="card space-y-4">
+        <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Lotissement / Intervention</h2>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Sélectionner un Lotissement</label>
+          <select id="lotissement-select" onchange="chargerLotissement()" class="mt-1 block w-full border border-gray-300 rounded p-2">
+            <option value="">-- Nouveau Lotissement --</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 gap-2">
+          <input type="text" id="lot-nom" placeholder="Nom du Lotissement" class="border p-2 rounded w-full">
+          <input type="text" id="lot-rue" placeholder="Rue" class="border p-2 rounded w-full">
+          <input type="text" id="lot-ville" placeholder="Ville" class="border p-2 rounded w-full">
+        </div>
+
+        <div class="flex items-center gap-2 text-sm">
+          <input type="checkbox" id="copy-to-client" onchange="copierVersClient()">
+          <label for="copy-to-client">Utiliser cette adresse pour le Client</label>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button onclick="sauvegarderLotissement()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-sm hover:bg-emerald-700">Enregistrer</button>
+          <button onclick="supprimerLotissement()" class="bg-red-600 text-white px-3 py-1.5 rounded text-sm hover:bg-red-700">Supprimer</button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Section Sous-Clients / Prestations -->
+    <section class="card space-y-4">
+      <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Sous-Clients (Appartements & Ramonages)</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+        <input type="text" id="sc-nom" placeholder="Nom Sous-Client" class="border p-2 rounded">
+        <input type="text" id="sc-app" placeholder="N° Appt / Lot" class="border p-2 rounded">
+        <input type="text" id="sc-type" placeholder="Type d'intervention (ex: Ramonage)" class="border p-2 rounded">
+        <input type="number" step="0.01" id="sc-prix" placeholder="Prix TTC (€)" class="border p-2 rounded">
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-sm">
+          <input type="checkbox" id="sc-copy-nom" onchange="copierNomClientSousClient()">
+          <label for="sc-copy-nom">Nom = Client Principal</label>
+        </div>
+        <button onclick="ajouterSousClient()" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Ajouter la ligne</button>
+      </div>
+
+      <!-- Tableau des Sous-Clients -->
+      <table class="w-full text-left border-collapse border mt-4">
+        <thead>
+          <tr class="bg-slate-100 text-sm">
+            <th class="border p-2">Nom</th>
+            <th class="border p-2">Appartement</th>
+            <th class="border p-2">Intervention</th>
+            <th class="border p-2">Prix TTC</th>
+            <th class="border p-2">Action</th>
+          </tr>
+        </thead>
+        <tbody id="sc-list-table">
+          <!-- Dynamique -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Détails Facturation & Action Génération -->
+    <section class="card grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Date d'intervention</label>
+        <input type="date" id="facture-date" class="border p-2 rounded w-full mt-1">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Numéro de Facture</label>
+        <input type="text" id="facture-num" readonly class="border p-2 rounded w-full bg-gray-100 mt-1">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Mode de Règlement</label>
+        <select id="facture-mode" class="border p-2 rounded w-full mt-1">
+          <option value="Virement">Virement</option>
+          <option value="Chèque">Chèque</option>
+          <option value="Espèce">Espèce</option>
+          <option value="Carte bancaire">Carte bancaire</option>
+        </select>
+      </div>
+
+      <div class="md:col-span-3 flex gap-4 pt-4 border-t">
+        <button onclick="genererEtSauvegarder()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded shadow flex-1">
+          📄 Générer Facture & Attestations + Envoyer vers Google Drive
+        </button>
+      </div>
+    </section>
+
+    <!-- Suivi des Factures -->
+    <section class="card space-y-4">
+      <h2 class="text-lg font-bold border-b pb-2 text-slate-700">Suivi des Factures</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse border">
+          <thead>
+            <tr class="bg-slate-100 text-sm">
+              <th class="border p-2">N°</th>
+              <th class="border p-2">Date</th>
+              <th class="border p-2">Client</th>
+              <th class="border p-2">Total (€)</th>
+              <th class="border p-2">Statut</th>
+              <th class="border p-2">Action</th>
+            </tr>
+          </thead>
+          <tbody id="factures-list-table">
+            <!-- Dynamique -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    /* ==========================================================================
+       1. PARAMÈTRES ET CONFIGURATION GOOGLE DRIVE API
+       ========================================================================== */
+    // ⚠️ REMPLACE CES DEUX VARIABLES PAR TES CLÉS DÉLIVRÉES PAR GOOGLE CLOUD CONSOLE
+    const CLIENT_ID = 'TON_CLIENT_ID_GOOGLE.apps.googleusercontent.com';
+    const API_KEY = 'TA_CLE_API_GOOGLE';
+
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    let tokenClient;
+    let gdriveFolderId = null;
+
+    // Données globales
+    let clients = JSON.parse(localStorage.getItem('clients') || '{}');
+    let lotissements = JSON.parse(localStorage.getItem('lotissements') || '{}');
+    let sousClients = [];
+    let factures = JSON.parse(localStorage.getItem('factures') || '[]');
+
+    document.getElementById('facture-date').valueAsDate = new Date();
+
+    /* ==========================================================================
+       2. AUTHENTIFICATION & INTERACTION GOOGLE DRIVE
+       ========================================================================== */
+    function gapiLoaded() {
+      gapi.load('client', async () => {
+        await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
+      });
+    }
+
+    function gisLoaded() {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID, scope: SCOPES,
+        callback: async (resp) => {
+          if (resp.error) return;
+          document.getElementById('gdrive-status').innerText = "Connecté à Drive";
+          document.getElementById('gdrive-status').className = "text-xs bg-green-500 text-white px-2 py-1 rounded";
+          await initialiserDossierDrive();
+        },
+      });
+    }
+
+    window.onload = () => {
+      if (typeof gapi !== 'undefined') gapiLoaded();
+      if (typeof google !== 'undefined') gisLoaded();
+      initUI();
+    };
+
+    function handleAuthClick() {
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    async function initialiserDossierDrive() {
+      // Cherche si le dossier "Factures_RamoXN" existe
+      let res = await gapi.client.drive.files.list({
+        q: "mimeType='application/vnd.google-apps.folder' and name='Factures_RamoXN' and trashed=false"
+      });
+      if (res.result.files.length > 0) {
+        gdriveFolderId = res.result.files[0].id;
+      } else {
+        // Crée le dossier
+        let folderMeta = { name: 'Factures_RamoXN', mimeType: 'application/vnd.google-apps.folder' };
+        let folder = await gapi.client.drive.files.create({ resource: folderMeta, fields: 'id' });
+        gdriveFolderId = folder.result.id;
+      }
+    }
+
+    async function uploadBlobToDrive(blob, filename) {
+      if (!gdriveFolderId) {
+        alert("Attention : non connecté à Google Drive. Le fichier ne sera sauvegardé qu'en local.");
+        return;
+      }
+      const metadata = { name: filename, parents: [gdriveFolderId] };
+      const formData = new FormData();
+      formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      formData.append('file', blob);
+
+      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token }),
+        body: formData
+      });
+    }
+
+    /* ==========================================================================
+       3. LOGIQUE MÉTIER & INTERFACE (Clients, Lotissements, Factures)
+       ========================================================================== */
+    function initUI() {
+      updateClientSelect();
+      updateLotissementSelect();
+      updateNumeroFacture();
+      afficherFactures();
+    }
+
+    function updateClientSelect() {
+      const select = document.getElementById('client-select');
+      select.innerHTML = '<option value="">-- Nouveau Client --</option>';
+      Object.keys(clients).forEach(nom => {
+        select.innerHTML += `<option value="${nom}">${nom}</option>`;
+      });
+    }
+
+    function updateLotissementSelect() {
+      const select = document.getElementById('lotissement-select');
+      select.innerHTML = '<option value="">-- Nouveau Lotissement --</option>';
+      Object.keys(lotissements).forEach(nom => {
+        select.innerHTML += `<option value="${nom}">${nom}</option>`;
+      });
+    }
+
+    function chargerClient() {
+      const nom = document.getElementById('client-select').value;
+      if (clients[nom]) {
+        document.getElementById('client-nom').value = nom;
+        document.getElementById('client-rue').value = clients[nom].rue;
+        document.getElementById('client-ville').value = clients[nom].ville;
+        document.getElementById('client-tel').value = clients[nom].tel;
+        document.getElementById('client-email').value = clients[nom].email;
+      }
+    }
+
+    function sauvegarderClient() {
+      const nom = document.getElementById('client-nom').value;
+      if (!nom) return alert("Le nom du client est obligatoire.");
+      clients[nom] = {
+        rue: document.getElementById('client-rue').value,
+        ville: document.getElementById('client-ville').value,
+        tel: document.getElementById('client-tel').value,
+        email: document.getElementById('client-email').value,
+      };
+      localStorage.setItem('clients', JSON.stringify(clients));
+      updateClientSelect();
+      alert("Client sauvegardé.");
+    }
+
+    function supprimerClient() {
+      const nom = document.getElementById('client-select').value;
+      if (nom && clients[nom]) {
+        delete clients[nom];
+        localStorage.setItem('clients', JSON.stringify(clients));
+        updateClientSelect();
+        alert("Client supprimé.");
+      }
+    }
+
+    function chargerLotissement() {
+      const nom = document.getElementById('lotissement-select').value;
+      if (lotissements[nom]) {
+        document.getElementById('lot-nom').value = nom;
+        document.getElementById('lot-rue').value = lotissements[nom].rue;
+        document.getElementById('lot-ville').value = lotissements[nom].ville;
+      }
+    }
+
+    function sauvegarderLotissement() {
+      const nom = document.getElementById('lot-nom').value;
+      if (!nom) return alert("Le nom du lotissement est obligatoire.");
+      lotissements[nom] = {
+        rue: document.getElementById('lot-rue').value,
+        ville: document.getElementById('lot-ville').value,
+      };
+      localStorage.setItem('lotissements', JSON.stringify(lotissements));
+      updateLotissementSelect();
+      alert("Lotissement sauvegardé.");
+    }
+
+    function copierVersLotissement() {
+      if (document.getElementById('copy-to-lot').checked) {
+        document.getElementById('lot-rue').value = document.getElementById('client-rue').value;
+        document.getElementById('lot-ville').value = document.getElementById('client-ville').value;
+      }
+    }
+
+    function copierVersClient() {
+      if (document.getElementById('copy-to-client').checked) {
+        document.getElementById('client-rue').value = document.getElementById('lot-rue').value;
+        document.getElementById('client-ville').value = document.getElementById('lot-ville').value;
+      }
+    }
+
+    function copierNomClientSousClient() {
+      if (document.getElementById('sc-copy-nom').checked) {
+        document.getElementById('sc-nom').value = document.getElementById('client-nom').value;
+      }
+    }
+
+    function ajouterSousClient() {
+      const nom = document.getElementById('sc-nom').value;
+      const app = document.getElementById('sc-app').value;
+      const type = document.getElementById('sc-type').value;
+      const prix = parseFloat(document.getElementById('sc-prix').value);
+
+      if (!nom || isNaN(prix)) return alert("Nom et prix sont requis.");
+
+      sousClients.push({ nom, app, type, prix });
+      document.getElementById('sc-nom').value = "";
+      document.getElementById('sc-app').value = "";
+      document.getElementById('sc-type').value = "";
+      document.getElementById('sc-prix').value = "";
+      afficherSousClients();
+    }
+
+    function afficherSousClients() {
+      const tbody = document.getElementById('sc-list-table');
+      tbody.innerHTML = "";
+      sousClients.forEach((sc, i) => {
+        tbody.innerHTML += `
+          <tr>
+            <td class="border p-2">${sc.nom}</td>
+            <td class="border p-2">${sc.app}</td>
+            <td class="border p-2">${sc.type}</td>
+            <td class="border p-2">${sc.prix.toFixed(2)} €</td>
+            <td class="border p-2"><button onclick="supprimerSousClient(${i})" class="text-red-600">Supprimer</button></td>
+          </tr>
+        `;
+      });
+    }
+
+    function supprimerSousClient(index) {
+      sousClients.splice(index, 1);
+      afficherSousClients();
+    }
+
+    function updateNumeroFacture() {
+      const date = new Date();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const yy = String(date.getFullYear()).slice(-2);
+      const prefix = `${mm}-${yy}`;
+      const count = factures.filter(f => f.num.startsWith(prefix)).length + 1;
+      document.getElementById('facture-num').value = `${prefix}-${String(count).padStart(3, '0')}`;
+    }
+
+    /* ==========================================================================
+       4. GÉNÉRATION DES DOCUMENTS PDF (jsPDF) ET ENVOI SUR DRIVE
+       ========================================================================== */
+    async function genererEtSauvegarder() {
+      if (sousClients.length === 0) return alert("Veuillez ajouter au moins un sous-client.");
+
+      const client = {
+        nom: document.getElementById('client-nom').value,
+        rue: document.getElementById('client-rue').value,
+        ville: document.getElementById('client-ville').value,
+        tel: document.getElementById('client-tel').value,
+        email: document.getElementById('client-email').value,
+      };
+
+      const lotissement = {
+        nom: document.getElementById('lot-nom').value,
+        rue: document.getElementById('lot-rue').value,
+        ville: document.getElementById('lot-ville').value,
+      };
+
+      const numFacture = document.getElementById('facture-num').value;
+      const dateIntervention = document.getElementById('facture-date').value;
+      const modePaiement = document.getElementById('facture-mode').value;
+      const totalTTC = sousClients.reduce((acc, sc) => acc + sc.prix, 0);
+
+      // 1. Génération du PDF Facture
+      const { jsPDF } = window.jspdf;
+      const docFacture = new jsPDF();
+
+      docFacture.setFont("helvetica", "bold");
+      docFacture.setFillColor(135, 206, 250);
+      docFacture.rect(10, 10, 190, 12, 'F');
+      docFacture.text(`FACTURE N° ${numFacture}`, 105, 18, { align: "center" });
+
+      docFacture.setFontSize(10);
+      docFacture.setFont("helvetica", "normal");
+      docFacture.text(`RamoXN - 5 Font Bonne 66210 Puyvalador`, 15, 30);
+      docFacture.text(`Client : ${client.nom} - ${client.rue}, ${client.ville}`, 15, 36);
+      docFacture.text(`Lieu intervention : ${lotissement.nom} (${lotissement.rue}, ${lotissement.ville})`, 15, 42);
+
+      // Tableau items
+      const rows = sousClients.map(sc => [`${sc.type} - ${sc.app} - ${sc.nom}`, "1", `${sc.prix.toFixed(2)} €`, `${sc.prix.toFixed(2)} €`]);
+      docFacture.autoTable({
+        startY: 50,
+        head: [['Désignation', 'Qté', 'Prix U.', 'Total TTC']],
+        body: rows,
+      });
+
+      let finalY = docFacture.lastAutoTable.finalY + 10;
+      docFacture.setFont("helvetica", "bold");
+      docFacture.text(`Total TTC : ${totalTTC.toFixed(2)} EUR`, 150, finalY);
+      docFacture.text(`Mode de règlement : ${modePaiement}`, 15, finalY + 10);
+
+      // Export Blob & Sauvegarde Drive Facture
+      const factureBlob = docFacture.output('blob');
+      const factureFilename = `Facture_${numFacture}_${client.nom}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "_");
+      
+      docFacture.save(factureFilename); // Téléchargement navigateur local
+      await uploadBlobToDrive(factureBlob, factureFilename);
+
+      // 2. Génération des Attestations
+      for (let sc of sousClients) {
+        const docAttest = new jsPDF();
+        docAttest.setFillColor(135, 206, 250);
+        docAttest.rect(10, 10, 190, 12, 'F');
+        docAttest.setFont("helvetica", "bold");
+        docAttest.text(`CERTIFICAT DE RAMONAGE - ${numFacture}`, 105, 18, { align: "center" });
+
+        docAttest.setFontSize(11);
+        docAttest.setFont("helvetica", "normal");
+        docAttest.text(`Je soussigné, ICKX Nicolaï, déclare avoir effectué le ramonage aux coordonnées ci-dessous :`, 15, 35);
+        docAttest.text(`Nom : ${sc.nom}`, 15, 45);
+        docAttest.text(`Adresse : Res. ${lotissement.nom} Lot. ${sc.app}`, 15, 52);
+        docAttest.text(`Date d'intervention : ${dateIntervention}`, 15, 59);
+        docAttest.text(`Type : ${sc.type} cheminée bois`, 15, 66);
+
+        const attestBlob = docAttest.output('blob');
+        const attestFilename = `Attestation_${sc.nom}_${sc.app}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "_");
+        
+        docAttest.save(attestFilename);
+        await uploadBlobToDrive(attestBlob, attestFilename);
+      }
+
+      // Enregistrement dans l'historique
+      const statut = ["Espèce", "Carte bancaire"].includes(modePaiement) ? "Payée" : "Non payée";
+      factures.push({ num: numFacture, date: dateIntervention, client: client.nom, total: totalTTC, statut, mode: modePaiement });
+      localStorage.setItem('factures', JSON.stringify(factures));
+
+      alert("Documents générés et enregistrés !");
+      sousClients = [];
+      afficherSousClients();
+      updateNumeroFacture();
+      afficherFactures();
+    }
+
+    function afficherFactures() {
+      const tbody = document.getElementById('factures-list-table');
+      tbody.innerHTML = "";
+      factures.forEach((f, i) => {
+        tbody.innerHTML += `
+          <tr>
+            <td class="border p-2">${f.num}</td>
+            <td class="border p-2">${f.date}</td>
+            <td class="border p-2">${f.client}</td>
+            <td class="border p-2">${f.total.toFixed(2)} €</td>
+            <td class="border p-2 font-bold ${f.statut === 'Payée' ? 'text-green-600' : 'text-red-600'}">${f.statut}</td>
+            <td class="border p-2">
+              ${f.statut !== 'Payée' ? `<button onclick="marquerPayee(${i})" class="bg-blue-500 text-white text-xs px-2 py-1 rounded">Marquer Payée</button>` : ''}
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    function marquerPayee(index) {
+      factures[index].statut = "Payée";
+      localStorage.setItem('factures', JSON.stringify(factures));
+      afficherFactures();
+    }
+  </script>
+</body>
+</html>
