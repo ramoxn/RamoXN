@@ -98,13 +98,12 @@
     <!-- En-tête / Connexion Google -->
     <header class="card flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 text-white">
       <div>
-        <h1 class="text-2xl font-bold">RamoXN - Facturation & Ramonage</h1>
-        <p class="text-sm text-slate-300">Application web connectée à Google Drive</p>
+        <h1 class="text-2xl font-bold">RamoXN</h1>
       </div>
       <div class="flex items-center gap-3">
         <span id="gdrive-status" class="text-xs bg-red-500 text-white px-2 py-1 rounded">Non connecté</span>
         <button id="btn-auth" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow transition">
-          Connexion Google Drive
+          Connexion
         </button>
       </div>
     </header>
@@ -381,7 +380,7 @@
         client_id: CLIENT_ID, scope: SCOPES,
         callback: async (resp) => {
           if (resp.error) return;
-          document.getElementById('gdrive-status').innerText = "Connecté à Drive";
+          document.getElementById('gdrive-status').innerText = "Connecté";
           document.getElementById('gdrive-status').className = "text-xs bg-green-500 text-white px-2 py-1 rounded";
           await initialiserDossierDrive();
           await chargerDonneesDepuisDrive();
