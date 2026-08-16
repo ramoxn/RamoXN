@@ -14,6 +14,9 @@
   <!-- PDF.js : lecture du texte des PDF pour la recherche -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
+  <!-- PDF.js pour lire le texte des PDF dans la recherche -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
   <!-- API Google Identity Services et Google Drive JS SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -1010,6 +1013,7 @@
     }
   </script>
 
+  <script>
     /* ============================================================
        SUIVI DES FACTURES + RECHERCHE TEXTE DANS LES PDF DRIVE
        ============================================================ */
@@ -1216,6 +1220,7 @@
       return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     }
 
+  </script>
 
 
   <!-- CODE DE SÉCURITÉ -->
