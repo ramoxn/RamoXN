@@ -101,9 +101,11 @@
         <h1 class="text-2xl font-bold">RamoXN</h1>
       </div>
       <div class="flex items-center gap-3">
-        <span id="gdrive-status" class="text-xs bg-red-500 text-white px-2 py-1 rounded">déconnecté</span>
-        <button id="btn-auth" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow transition">
+        <button id="btn-auth" onclick="handleAuthClick()" class="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded shadow transition">
           Connexion
+        </button>
+        <button onclick="ouvrirPageSuivi()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow transition">
+          📂 Suivi des factures
         </button>
       </div>
     </header>
@@ -453,8 +455,8 @@
         client_id: CLIENT_ID, scope: SCOPES,
         callback: async (resp) => {
           if (resp.error) return;
-          document.getElementById('gdrive-status').innerText = "Connecté";
-          document.getElementById('gdrive-status').className = "text-xs bg-green-500 text-white px-2 py-1 rounded";
+          const btnAuth = document.getElementById('btn-auth');
+          btnAuth.className = "bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded shadow transition";
           await initialiserDossierDrive();
           await chargerDonneesDepuisDrive();
           await chargerFacturesDepuisDrive();
@@ -485,8 +487,8 @@
             tokenClient.requestAccessToken({ prompt: 'none' });
           } else if (essais >= 20) {
             clearInterval(attente);
-            document.getElementById('gdrive-status').innerText = 'Connexion Google requise';
-            document.getElementById('gdrive-status').className = 'text-xs bg-orange-500 text-white px-2 py-1 rounded';
+            const btnAuth = document.getElementById('btn-auth');
+            btnAuth.className = "bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded shadow transition";
           }
         }, 250);
         return;
