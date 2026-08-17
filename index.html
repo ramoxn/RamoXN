@@ -354,7 +354,7 @@
     const CLIENT_ID = '890721578684-5pldrri1ifc7ql6m4v9jp9kgfh0d5cct.apps.googleusercontent.com';
     const API_KEY = 'AIzaSyAdor5nlQ95UuklUoc4hkA0doxnPUL5gcw';
 
-    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
     let tokenClient;
     let gdriveFolderId = null;
 
@@ -444,7 +444,7 @@
        ========================================================================== */
     function gapiLoaded() {
       gapi.load('client', async () => {
-        await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
+        await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest", "https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest"] });
       });
     }
 
@@ -858,7 +858,49 @@
       right.forEach((line, i) => doc.text(String(line), 152.5, y + 24 + i * 7, { align: 'center' }));
     }
 
-    async function genererEtSauvegarder() {
+    
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function base64UrlEncode(text) {
+      return btoa(unescape(encodeURIComponent(text)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    async function envoyerDocumentsParEmail(destinataire, fichiers) {
+      const boundary = 'RamoXN_' + Date.now();
+      let mime = `To: ${destinataire}\r\n`;
+      mime += 'Subject: Vos documents RamoXN\r\n';
+      mime += 'MIME-Version: 1.0\r\n';
+      mime += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+      mime += `--${boundary}\r\n`;
+      mime += 'Content-Type: text/plain; charset="UTF-8"\r\n\r\n';
+      mime += 'Bonjour,\r\n\r\nVeuillez trouver en pièces jointes votre facture et votre/vos attestation(s) de ramonage.\r\n\r\nCordialement,\r\nRamoXN\r\n\r\n';
+
+      for (const fichier of fichiers) {
+        const b64 = await blobToBase64(fichier.blob);
+        mime += `--${boundary}\r\n`;
+        mime += 'Content-Type: application/pdf\r\n';
+        mime += 'Content-Transfer-Encoding: base64\r\n';
+        mime += `Content-Disposition: attachment; filename="${fichier.name}"\r\n\r\n`;
+        mime += (b64.match(/.{1,76}/g) || []).join('\r\n') + '\r\n\r\n';
+      }
+      mime += `--${boundary}--`;
+
+      await gapi.client.gmail.users.messages.send({
+        userId: 'me',
+        resource: { raw: base64UrlEncode(mime) }
+      });
+    }
+
+async function genererEtSauvegarder() {
+      const documentsPourEmail = [];
       if (sousClients.length === 0) return alert('Veuillez ajouter au moins un sous-client.');
 
       const client = {
@@ -979,6 +1021,7 @@
       const factureFilename = `Facture_${numFacture}_${safeFileName(client.nom)}.pdf`;
       docFacture.save(factureFilename);
       await uploadBlobToDrive(factureBlob, factureFilename);
+      documentsPourEmail.push({ blob: factureBlob, name: factureFilename });
 
       // ------------------------------------------------------------------------
       // 2. ATTESTATION — une page A4 par sous-client
@@ -1047,12 +1090,35 @@
         const attestFilename = `Attestation_${safeFileName(sc.nom)}_${safeFileName(sc.app)}.pdf`;
         docAttest.save(attestFilename);
         await uploadBlobToDrive(attestBlob, attestFilename);
+        documentsPourEmail.push({ blob: attestBlob, name: attestFilename });
       }
 
       const statut = ['Espèce', 'Carte bancaire'].includes(modePaiement) ? 'Payée' : 'Non payée';
       factures.push({ num: numFacture, date: dateIntervention, client: client.nom, total: totalTTC, statut, mode: modePaiement });
       localStorage.setItem('factures', JSON.stringify(factures));
       sauvegarderFacturesSurDrive();
+
+            // Proposition d'envoi par email au client principal
+      const emailClient = client.email.trim();
+      if (emailClient) {
+        const envoyer = confirm(
+          `Les documents ont été générés.\n\nVoulez-vous les envoyer par email à :\n${emailClient} ?`
+        );
+        if (envoyer) {
+          try {
+            await envoyerDocumentsParEmail(emailClient, documentsPourEmail);
+            alert(`Email envoyé à ${emailClient}.`);
+          } catch (e) {
+            console.error("Erreur envoi Gmail :", e);
+            alert(
+              "Les documents sont bien enregistrés sur Google Drive, mais l'envoi du mail a échoué.\n\n" +
+              (e.message || e)
+            );
+          }
+        }
+      } else {
+        alert("Les documents sont bien enregistrés, mais le client principal n’a pas d’adresse email.");
+      }
 
       alert('Documents générés et enregistrés !');
       sousClients = [];
