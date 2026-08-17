@@ -364,6 +364,79 @@
     let sousClients = [];
     let factures = JSON.parse(localStorage.getItem('factures') || '[]');
 
+    // --- Synchronisation de la liste des factures avec Google Drive ---
+    const FACTURES_DRIVE_FILE = 'Factures_RamoXN.json';
+
+    async function chargerFacturesDepuisDrive() {
+      if (!gdriveFolderId || !gapi.auth.getToken()?.access_token) return;
+      try {
+        const res = await gapi.client.drive.files.list({
+          q: `'${gdriveFolderId}' in parents and name='${FACTURES_DRIVE_FILE}' and trashed=false`,
+          fields: 'files(id,name)',
+          pageSize: 1
+        });
+        if (res.result.files && res.result.files.length) {
+          const id = res.result.files[0].id;
+          const response = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`,
+            { headers: { Authorization: 'Bearer ' + gapi.auth.getToken().access_token } }
+          );
+          if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data)) {
+              factures = data;
+              localStorage.setItem('factures', JSON.stringify(factures));
+      await sauvegarderFacturesSurDrive();
+              afficherFactures();
+              if (typeof afficherSuiviFactures === 'function') afficherSuiviFactures(factures);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Erreur chargement factures Drive:', e);
+      }
+    }
+
+    async function sauvegarderFacturesSurDrive() {
+      if (!gdriveFolderId || !gapi.auth.getToken()?.access_token) return;
+      try {
+        const token = gapi.auth.getToken().access_token;
+        const blob = new Blob([JSON.stringify(factures, null, 2)], {type:'application/json'});
+
+        const res = await gapi.client.drive.files.list({
+          q: `'${gdriveFolderId}' in parents and name='${FACTURES_DRIVE_FILE}' and trashed=false`,
+          fields: 'files(id,name)',
+          pageSize: 1
+        });
+
+        const form = new FormData();
+        form.append('metadata', new Blob([
+          JSON.stringify({name: FACTURES_DRIVE_FILE})
+        ], {type:'application/json'}));
+        form.append('file', blob);
+
+        if (res.result.files && res.result.files.length) {
+          await fetch(
+            `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(res.result.files[0].id)}?uploadType=multipart`,
+            {method:'PATCH', headers:{Authorization:'Bearer '+token}, body:form}
+          );
+        } else {
+          const createForm = new FormData();
+          createForm.append('metadata', new Blob([
+            JSON.stringify({name:FACTURES_DRIVE_FILE, parents:[gdriveFolderId]})
+          ], {type:'application/json'}));
+          createForm.append('file', blob);
+          await fetch(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+            {method:'POST', headers:{Authorization:'Bearer '+token}, body:createForm}
+          );
+        }
+      } catch (e) {
+        console.warn('Erreur sauvegarde factures Drive:', e);
+      }
+    }
+
+
     document.getElementById('facture-date').valueAsDate = new Date();
 
     /* ==========================================================================
@@ -384,6 +457,7 @@
           document.getElementById('gdrive-status').className = "text-xs bg-green-500 text-white px-2 py-1 rounded";
           await initialiserDossierDrive();
           await chargerDonneesDepuisDrive();
+          await chargerFacturesDepuisDrive();
           initUI();
         },
       });
@@ -978,6 +1052,7 @@
       const statut = ['Espèce', 'Carte bancaire'].includes(modePaiement) ? 'Payée' : 'Non payée';
       factures.push({ num: numFacture, date: dateIntervention, client: client.nom, total: totalTTC, statut, mode: modePaiement });
       localStorage.setItem('factures', JSON.stringify(factures));
+      sauvegarderFacturesSurDrive();
 
       alert('Documents générés et enregistrés !');
       sousClients = [];
@@ -1008,6 +1083,7 @@
     function marquerPayee(index) {
       factures[index].statut = "Payée";
       localStorage.setItem('factures', JSON.stringify(factures));
+      sauvegarderFacturesSurDrive();
       afficherFactures();
     }
   </script>
@@ -1087,6 +1163,7 @@
 
       original.statut = original.statut === 'Payée' ? 'Non payée' : 'Payée';
       localStorage.setItem('factures', JSON.stringify(factures));
+      sauvegarderFacturesSurDrive();
       afficherSuiviFactures(suiviFacturesAffichees);
     }
 
