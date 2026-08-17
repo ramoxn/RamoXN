@@ -101,11 +101,9 @@
         <h1 class="text-2xl font-bold">RamoXN</h1>
       </div>
       <div class="flex items-center gap-3">
-        <button id="btn-auth" onclick="handleAuthClick()" class="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded shadow transition">
+        <span id="gdrive-status" class="text-xs bg-red-500 text-white px-2 py-1 rounded">déconnecté</span>
+        <button id="btn-auth" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow transition">
           Connexion
-        </button>
-        <button onclick="ouvrirPageSuivi()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded shadow transition">
-          📂 Suivi des factures
         </button>
       </div>
     </header>
@@ -180,7 +178,7 @@
       <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
         <input type="text" id="sc-nom" placeholder="Nom Sous-Client" class="border p-2 rounded">
         <input type="text" id="sc-app" placeholder="N° Appt / Lot" class="border p-2 rounded">
-        <input type="text" id="sc-type" placeholder="Type d'intervention (ex: Ramonage)" class="border p-2 rounded">
+        <input type="text" id="sc-type" value="Ramonage" placeholder="Type d'intervention (ex: Ramonage)" class="border p-2 rounded">
         <input type="number" step="0.01" id="sc-prix" placeholder="Prix TTC (€)" class="border p-2 rounded">
       </div>
 
@@ -236,7 +234,7 @@
       </div>
     </section>
 
-    <!-- Accès au suivi des factures 
+    <!-- Accès au suivi des factures -->
     <section class="card">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
@@ -247,7 +245,7 @@
           📂 Ouvrir le suivi des factures
         </button>
       </div>
-    </section> -->
+    </section>
 
   </div>
 
@@ -455,8 +453,8 @@
         client_id: CLIENT_ID, scope: SCOPES,
         callback: async (resp) => {
           if (resp.error) return;
-          const btnAuth = document.getElementById('btn-auth');
-          btnAuth.className = "bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded shadow transition";
+          document.getElementById('gdrive-status').innerText = "Connecté";
+          document.getElementById('gdrive-status').className = "text-xs bg-green-500 text-white px-2 py-1 rounded";
           await initialiserDossierDrive();
           await chargerDonneesDepuisDrive();
           await chargerFacturesDepuisDrive();
@@ -487,8 +485,8 @@
             tokenClient.requestAccessToken({ prompt: 'none' });
           } else if (essais >= 20) {
             clearInterval(attente);
-            const btnAuth = document.getElementById('btn-auth');
-            btnAuth.className = "bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded shadow transition";
+            document.getElementById('gdrive-status').innerText = 'Connexion Google requise';
+            document.getElementById('gdrive-status').className = 'text-xs bg-orange-500 text-white px-2 py-1 rounded';
           }
         }, 250);
         return;
@@ -1123,6 +1121,7 @@ async function genererEtSauvegarder() {
       }
 
       alert('Documents générés et enregistrés !');
+      document.getElementById('sc-prix').value = "";
       sousClients = [];
       afficherSousClients();
       updateNumeroFacture();
