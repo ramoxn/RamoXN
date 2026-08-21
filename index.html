@@ -863,7 +863,7 @@
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
 
-    async function envoyerDocumentsParEmail(destinataire, fichiers) {
+    async function envoyerDocumentsParEmail(destinataire, fichiers, texteEmail) {
       const boundary = 'RamoXN_' + Date.now();
       let mime = `To: ${destinataire}\r\n`;
       mime += 'Subject: Vos documents RamoXN\r\n';
@@ -871,7 +871,7 @@
       mime += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
       mime += `--${boundary}\r\n`;
       mime += 'Content-Type: text/plain; charset="UTF-8"\r\n\r\n';
-      mime += 'Bonjour,\r\n\r\nVeuillez trouver en pièces jointes votre facture et votre/vos attestation(s) de ramonage.\r\n\r\nCordialement,\r\nRamoXN\r\n\r\n';
+      mime += texteEmail + '\r\n';
 
       for (const fichier of fichiers) {
         const b64 = await blobToBase64(fichier.blob);
@@ -1092,18 +1092,46 @@ async function genererEtSauvegarder() {
       const emailClient = client.email.trim();
       if (emailClient) {
         const envoyer = confirm(
-          `Les documents ont été générés.\n\nVoulez-vous les envoyer par email à :\n${emailClient} ?`
+          `Les documents ont été générés.\n\nVoulez-vous les envoyer par email à :\n${emailClient} ?\n\nOK = Facture seule\nAnnuler = Facture + attestation(s)`
         );
         if (envoyer) {
           try {
-            await envoyerDocumentsParEmail(emailClient, documentsPourEmail);
-            alert(`Email envoyé à ${emailClient}.`);
+            const texteFactureSeule =
+              'Bonjour,\n\nVeuillez trouver en pièce jointe votre facture de ramonage.\n\nCordialement,\nRamoXN';
+            await envoyerDocumentsParEmail(
+              emailClient,
+              [documentsPourEmail[0]],
+              texteFactureSeule
+            );
+            alert(`Email avec la facture seule envoyé à ${emailClient}.`);
           } catch (e) {
             console.error("Erreur envoi Gmail :", e);
             alert(
               "Les documents sont bien enregistrés sur Google Drive, mais l'envoi du mail a échoué.\n\n" +
               (e.message || e)
             );
+          }
+        } else {
+          const envoyerTous = confirm(
+            `Voulez-vous envoyer la facture + attestation(s) à :\n${emailClient} ?`
+          );
+          if (envoyerTous) {
+            try {
+              const texteTousDocuments =
+                'Bonjour,\n\nVeuillez trouver en pièces jointes votre facture ainsi que votre/vos attestation(s) de ramonage.\n\nCordialement,\nRamoXN';
+              await envoyerDocumentsParEmail(
+                emailClient,
+                documentsPourEmail,
+                texteTousDocuments
+              );
+              alert(`Email avec la facture et les attestation(s) envoyé à ${emailClient}.`);
+            } catch (e) {
+              console.error("Erreur envoi Gmail :", e);
+              alert(
+                "Les documents sont bien enregistrés sur Google Drive, mais l'envoi du mail a échoué.\n\n" +
+                (e.message || e)
+              );
+            }
           }
         }
       } else {
